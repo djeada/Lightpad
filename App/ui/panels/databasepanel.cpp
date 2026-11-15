@@ -1,4 +1,5 @@
 #include "databasepanel.h"
+#include "../tabnavigation.h"
 #include "../paneltypography.h"
 
 #include "../../database/csvimport.h"
@@ -242,6 +243,7 @@ void DatabasePanel::buildUi() {
   headingLayout->addWidget(consoleTitle);
   headingLayout->addStretch(1);
   auto *consoleHint = new QLabel(tr("Ctrl+Enter to run"), consoleHeading);
+  consoleHint->setObjectName("dbConsoleHint");
   consoleHint->setWordWrap(true);
   headingLayout->addWidget(consoleHint);
   consoleLayout->addWidget(consoleHeading);
@@ -272,6 +274,8 @@ void DatabasePanel::buildUi() {
   m_resultTabs->setTabsClosable(true);
   m_resultTabs->setDocumentMode(true);
   m_resultTabs->setMovable(true);
+  TabNavigation::install(m_resultTabs, this);
+  m_resultTabs->tabBar()->setToolTip(tr("Drag to reorder · Ctrl+PageUp/PageDown to switch · Ctrl+Shift+PageUp/PageDown to move"));
   m_resultTabs->setElideMode(Qt::ElideRight);
   m_resultTabs->setUsesScrollButtons(true);
   m_resultStack->addWidget(m_resultsEmpty);
@@ -603,7 +607,7 @@ void DatabasePanel::applyTheme(const Theme &theme) {
           "none; padding: 6px 10px; }"
           "QLabel#dbResultsEmpty { color: %9; background: %1; }"
           "QWidget#dbStatusBar { background: %2; border-top: 1px solid %3; }"
-          "QLabel#dbStatus, QLabel#dbRunning { color: %9; }"
+          "QLabel#dbStatus, QLabel#dbRunning, QLabel#dbConsoleHint { color: %9; }"
           "QProgressBar#dbProgress { background: %2; border: none; }"
           "QProgressBar#dbProgress::chunk { background: %7; }"
           "QScrollBar:vertical { background: transparent; width: 10px; }"
@@ -623,6 +627,9 @@ void DatabasePanel::applyTheme(const Theme &theme) {
   if (auto *d = dynamic_cast<SchemaTreeDelegate *>(m_tree->itemDelegate())) {
     d->muted = muted;
   }
+  m_tree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
+  m_resultTabs->setStyleSheet(UIStyleHelper::tabWidgetStyle(theme));
+  m_outputTabs->setStyleSheet(UIStyleHelper::tabWidgetStyle(theme));
   m_console->applyTheme(theme);
   m_insights->applyTheme(theme);
   m_storage->applyTheme(theme);

@@ -75,10 +75,28 @@ QVector<SyntaxRule> TypeScriptSyntaxPlugin::syntaxRules() const {
   templateRule.name = "string";
   rules.append(templateRule);
 
+  // Method calls are refined by the function rule below; field accesses keep
+  // the member color, including chains such as mesh.position.x.
+  SyntaxRule memberRule;
+  memberRule.pattern = QRegularExpression(
+      R"((?:(?<!\.)\.(?!\.)|->)\s*([A-Za-z_$][A-Za-z0-9_$]*))");
+  memberRule.name = "member";
+  memberRule.captureGroup = 1;
+  rules.append(memberRule);
+
   SyntaxRule functionRule;
-  functionRule.pattern = QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()");
+  functionRule.pattern = QRegularExpression(
+      QStringLiteral("\\b(?!(?:%1)\\b)[A-Za-z_$][A-Za-z0-9_$]*(?=\\s*\\()")
+          .arg(keywords().join('|')));
   functionRule.name = "function";
   rules.append(functionRule);
+
+  SyntaxRule constructedType;
+  constructedType.pattern = QRegularExpression(
+      R"(\b(?:new|extends|implements|instanceof)\s+(?:[A-Za-z_$][\w$]*\s*\.\s*)*([A-Za-z_$][\w$]*))");
+  constructedType.name = "type_reference";
+  constructedType.captureGroup = 1;
+  rules.append(constructedType);
 
   SyntaxRule decoratorRule;
   decoratorRule.pattern = QRegularExpression("@[A-Za-z_][A-Za-z0-9_]*");
@@ -89,6 +107,13 @@ QVector<SyntaxRule> TypeScriptSyntaxPlugin::syntaxRules() const {
   commentRule.pattern = QRegularExpression("//[^\n]*");
   commentRule.name = "comment";
   rules.append(commentRule);
+
+  SyntaxRule typeDefinition;
+  typeDefinition.pattern = QRegularExpression(
+      R"(\b(?:class|interface|enum|type)\s+([A-Za-z_$][\w$]*))");
+  typeDefinition.name = "type_definition";
+  typeDefinition.captureGroup = 1;
+  rules.append(typeDefinition);
 
   return rules;
 }

@@ -926,8 +926,8 @@ void DbResultView::applyTheme(const Theme &theme) {
           "%1; border: none;"
           "  border-bottom: 1px solid %2; border-right: 1px solid %2; }"
           "QHeaderView::section { background: %1; color: %10; border: none;"
-          "  border-right: 1px solid %2; border-bottom: 1px solid %2; padding: "
-          "4px 8px; }"
+          "  border-bottom: 1px solid %2; padding: "
+          "7px 10px; font-weight: 600; }"
           "QHeaderView::section:hover { color: %4; }")
           .arg(theme.surfaceColor.name(), theme.borderColor.name(),
                theme.backgroundColor.name(), text.name(),

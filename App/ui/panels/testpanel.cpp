@@ -289,7 +289,7 @@ public:
         m_selectedBorder.isValid() ? m_selectedBorder
                                    : option.palette.color(QPalette::Highlight);
 
-    QRect rowRect = opt.rect.adjusted(2, 1, -2, -1);
+    QRect rowRect = opt.rect.adjusted(0, 1, 0, -1);
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, false);
 
@@ -300,7 +300,7 @@ public:
       painter->setBrush(fill);
       painter->drawRect(rowRect);
 
-      if (isSelected) {
+      if (isSelected && index.column() == 0) {
         painter->setPen(Qt::NoPen);
         painter->setBrush(selectedBorder);
         painter->drawRect(
@@ -1007,14 +1007,7 @@ void TestPanel::applyTheme(const Theme &theme) {
   m_filterCombo->setStyleSheet(comboStyle);
   m_configCombo->setStyleSheet(comboStyle);
   m_autoRunModeCombo->setStyleSheet(comboStyle);
-  m_detailTabs->setStyleSheet(
-      QString(
-          "QTabWidget::pane { border: none; background: %1; }"
-          "QTabBar::tab { background: %2; color: %3; border: none; padding: "
-          "8px 12px; }"
-          "QTabBar::tab:selected { color: %4; border-bottom: 2px solid %4; }")
-          .arg(panelSurface.name(), headerSurface.name(), secondaryText.name(),
-               accentColor.name()));
+  m_detailTabs->setStyleSheet(UIStyleHelper::tabWidgetStyle(theme));
   const QColor link = ColorContrast::ensure(accentColor, panelSurface);
   m_detailPane->document()->setDefaultStyleSheet("a { color: " + link.name() +
                                                  "; }");

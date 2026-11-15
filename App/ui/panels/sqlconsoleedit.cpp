@@ -1,5 +1,7 @@
 #include "sqlconsoleedit.h"
+#include "../../core/editor/indentation.h"
 #include "../../database/sqlquerycontext.h"
+#include "../../settings/settingsmanager.h"
 #include "../paneltypography.h"
 
 #include "../../database/sqlkeywords.h"
@@ -41,7 +43,7 @@ void SqlHighlighter::setTheme(const Theme &theme) {
     return f;
   };
   m_keyword = fmt(theme.keywordFormat_0, true);
-  m_type = fmt(theme.keywordFormat_1);
+  m_type = fmt(theme.typeFormat);
   m_function = fmt(theme.functionFormat);
   m_string = fmt(theme.quotationFormat);
   m_number = fmt(theme.numberFormat);
@@ -55,6 +57,34 @@ void SqlHighlighter::setTheme(const Theme &theme) {
 void SqlHighlighter::highlightBlock(const QString &text) {
   const int n = text.size();
   int i = 0;
+
+  // States 2–5 preserve single quotes and quoted identifiers across lines.
+  const QString quotes = QStringLiteral("'\"`]");
+  auto quoted = [&](int start, QChar close, int state, bool opening) {
+    int j = start + (opening ? 1 : 0);
+    bool closed = false;
+    while (j < n) {
+      if (text[j] == close) {
+        if (j + 1 < n && text[j + 1] == close) {
+          j += 2;
+          continue;
+        }
+        ++j;
+        closed = true;
+        break;
+      }
+      ++j;
+    }
+    setFormat(start, j - start, state == 2 ? m_string : m_identifier);
+    setCurrentBlockState(closed ? 0 : state);
+    return j;
+  };
+  if (previousBlockState() >= 2 && previousBlockState() <= 5) {
+    const int state = previousBlockState();
+    i = quoted(0, quotes[state - 2], state, false);
+    if (currentBlockState() != 0)
+      return;
+  }
 
   if (previousBlockState() == 1) {
     const int close = text.indexOf(QLatin1String("*/"));
@@ -91,20 +121,9 @@ void SqlHighlighter::highlightBlock(const QString &text) {
     }
     if (c == '\'' || c == '"' || c == '`' || c == '[') {
       const QChar close = c == '[' ? QChar(']') : c;
-      int j = i + 1;
-      while (j < n) {
-        if (text[j] == close) {
-          if (close != ']' && j + 1 < n && text[j + 1] == close) {
-            j += 2;
-            continue;
-          }
-          ++j;
-          break;
-        }
-        ++j;
-      }
-      setFormat(i, j - i, c == '\'' ? m_string : m_identifier);
-      i = j;
+      i = quoted(i, close, quotes.indexOf(close) + 2, true);
+      if (currentBlockState() != 0)
+        return;
       continue;
     }
     if (c.isDigit() || (c == '.' && i + 1 < n && text[i + 1].isDigit())) {
@@ -162,7 +181,12 @@ void SqlHighlighter::highlightBlock(const QString &text) {
 SqlConsoleEdit::SqlConsoleEdit(QWidget *parent) : QPlainTextEdit(parent) {
   setObjectName("dbConsoleEdit");
   setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
-  setTabStopDistance(fontMetrics().horizontalAdvance(' ') * 4);
+  setTabWidth(SettingsManager::instance().getValue("tabWidth", 4).toInt());
+  connect(&SettingsManager::instance(), &SettingsManager::settingChanged, this,
+          [this](const QString &key, const QVariant &value) {
+            if (key == "tabWidth")
+              setTabWidth(value.toInt());
+          });
   setLineWrapMode(QPlainTextEdit::NoWrap);
   setPlaceholderText(
       tr("Write SQL here. Run statement (Ctrl+Enter) executes the current "
@@ -183,8 +207,18 @@ SqlConsoleEdit::SqlConsoleEdit(QWidget *parent) : QPlainTextEdit(parent) {
 
   connect(this, &QPlainTextEdit::cursorPositionChanged, this,
           &SqlConsoleEdit::updateCurrentStatement);
+  connect(this, &QPlainTextEdit::selectionChanged, this, [this] {
+    if (textCursor().hasSelection())
+      m_completer->popup()->hide();
+    updateCurrentStatement();
+  });
   connect(this, &QPlainTextEdit::textChanged, this,
           &SqlConsoleEdit::updateCurrentStatement);
+}
+
+void SqlConsoleEdit::setTabWidth(int width) {
+  m_tabWidth = qBound(1, width, 16);
+  setTabStopDistance(fontMetrics().horizontalAdvance(' ') * m_tabWidth);
 }
 
 void SqlConsoleEdit::setEngine(DbEngine engine) {
@@ -246,6 +280,8 @@ void SqlConsoleEdit::applyTheme(const Theme &theme) {
 }
 
 bool SqlConsoleEdit::event(QEvent *e) {
+  if (e->type() == QEvent::FontChange)
+    setTabWidth(m_tabWidth);
 
   if (e->type() == QEvent::ShortcutOverride) {
     auto *ke = static_cast<QKeyEvent *>(e);
@@ -267,6 +303,10 @@ QString SqlConsoleEdit::prefixAtCursor(int *start) const {
 }
 
 void SqlConsoleEdit::showCompletions(bool explicitRequest) {
+  if (isReadOnly() || textCursor().hasSelection()) {
+    m_completer->popup()->hide();
+    return;
+  }
   int start = 0;
   const QString prefix = prefixAtCursor(&start);
   const QTextCursor c = textCursor();
@@ -340,6 +380,8 @@ void SqlConsoleEdit::showCompletions(bool explicitRequest) {
 }
 
 void SqlConsoleEdit::insertCompletion(const QModelIndex &index) {
+  if (isReadOnly() || textCursor().hasSelection())
+    return;
   bool ok = false;
   int idx = index.data(Qt::UserRole).toInt(&ok);
   if (!ok) {
@@ -363,6 +405,13 @@ void SqlConsoleEdit::insertCompletion(const QModelIndex &index) {
 
 void SqlConsoleEdit::keyPressEvent(QKeyEvent *event) {
   QAbstractItemView *popup = m_completer->popup();
+  const bool backtab =
+      event->key() == Qt::Key_Backtab ||
+      (event->key() == Qt::Key_Tab && event->modifiers() & Qt::ShiftModifier);
+  if (textCursor().hasSelection() || backtab ||
+      (event->modifiers() &
+       (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier)))
+    popup->hide();
   if (popup->isVisible()) {
     switch (event->key()) {
     case Qt::Key_Enter:
@@ -414,6 +463,40 @@ void SqlConsoleEdit::keyPressEvent(QKeyEvent *event) {
   if (ctrl && event->key() == Qt::Key_Space) {
     showCompletions(true);
     return;
+  }
+
+  const bool plain =
+      !(event->modifiers() &
+        (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier));
+  if (plain &&
+      (event->key() == Qt::Key_Tab || backtab ||
+       event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
+    if (!isReadOnly()) {
+      const bool spaces =
+          SettingsManager::instance().getValue("insertSpaces", true).toBool();
+      QTextCursor cursor = textCursor();
+      if (event->key() == Qt::Key_Tab || backtab)
+        EditorIndentation::tab(cursor, m_tabWidth, spaces, backtab);
+      else
+        EditorIndentation::insertNewline(
+            cursor,
+            {"sql", m_tabWidth,
+             SettingsManager::instance().getValue("autoIndent", true).toBool(),
+             spaces, !spaces});
+      setTextCursor(cursor);
+      ensureCursorVisible();
+    }
+    event->accept();
+    return;
+  }
+  if (!isReadOnly() && event->key() == Qt::Key_Backspace &&
+      event->modifiers() == Qt::NoModifier) {
+    auto cursor = textCursor();
+    if (EditorIndentation::backspace(cursor, m_tabWidth)) {
+      setTextCursor(cursor);
+      popup->hide();
+      return;
+    }
   }
 
   QPlainTextEdit::keyPressEvent(event);

@@ -549,7 +549,9 @@ QString treeWidgetStyleImpl(const Style &s) {
                      "  outline: none;"
                      "}"
                      "QTreeWidget::item {"
-                     "  padding: 4px;"
+                     "  padding: 5px 8px;"
+                     "  min-height: 22px;"
+                     "  border-radius: 3px;"
                      "}"
                      "QTreeWidget::item:selected,"
                      "QTreeWidget::item:!active:selected {"
@@ -564,7 +566,7 @@ QString treeWidgetStyleImpl(const Style &s) {
                      "  color: {headerFg};"
                      "  border: none;"
                      "  {headerBorder}"
-                     "  padding: 4px 8px;"
+                     "  padding: 7px 10px;"
                      "  font-weight: bold;"
                      "}"),
       {{"bg", chrome(s, glowSurface(s, c.surfaceBase, 0.35))},
@@ -719,11 +721,13 @@ QString formDialogStyleImpl(const Style &s) {
                  "  %2"
                  "  border-radius: %3px;"
                  "}"
-                 "QLabel { color: %4; background: transparent; }")
+                 "QLabel { color: %4; background: transparent; }"
+                 "QLabel[lightpadDescription=\"true\"] { color: %5; }")
       .arg(chrome(s, bg))
       .arg(borderRule(s, border))
       .arg(qMax(4, radius(s)))
-      .arg(c.textPrimary.name());
+      .arg(c.textPrimary.name())
+      .arg(c.textSecondary.name());
 }
 
 QString groupBoxStyleImpl(const Style &s) {
@@ -734,8 +738,8 @@ QString groupBoxStyleImpl(const Style &s) {
                  "  background: %1;"
                  "  %2"
                  "  border-radius: %5px;"
-                 "  margin-top: 12px;"
-                 "  padding: 12px;"
+                 "  margin-top: 16px;"
+                 "  padding: 16px;"
                  "  padding-top: 24px;"
                  "  font-weight: bold;"
                  "  color: %3;"
@@ -746,14 +750,12 @@ QString groupBoxStyleImpl(const Style &s) {
                  "  left: 12px;"
                  "  padding: 0 6px;"
                  "  color: %4;"
-                 "  font-size: 11px;"
-                 "  text-transform: uppercase;"
-                 "  letter-spacing: 1px;"
+                 "  font-size: 12px;"
                  "}")
       .arg(chrome(s, bg))
       .arg(borderRule(s, border))
       .arg(c.textPrimary.name())
-      .arg(accentTextOn(s, c.surfaceBase).name())
+      .arg(c.textSecondary.name())
       .arg(qMax(4, radius(s)));
 }
 
@@ -943,10 +945,11 @@ QString tableWidgetStyleImpl(const Style &s) {
   return QString("QTableWidget, QTableView {"
                  "  background: %1;"
                  "  color: %2;"
+                 "  alternate-background-color: %10;"
+                 "  gridline-color: %11;"
+                 "  outline: none;"
                  "  %8"
                  "  border-radius: %9px;"
-                 "  gridline-color: %3;"
-                 "  outline: none;"
                  "  selection-background-color: %4;"
                  "  selection-color: %7;"
                  "}"
@@ -962,16 +965,15 @@ QString tableWidgetStyleImpl(const Style &s) {
                  "  color: %6;"
                  "  border: none;"
                  "  border-bottom: 1px solid %3;"
-                 "  padding: 4px 8px;"
+                 "  padding: 7px 10px;"
                  "  font-size: 11px;"
-                 "  text-transform: uppercase;"
-                 "  letter-spacing: 1px;"
+                 "  font-weight: 600;"
                  "}"
                  "QTableCornerButton::section {"
                  "  background: %5;"
                  "  border: none;"
                  "}")
-      .arg(chrome(s, c.surfaceOverlay))
+      .arg(chrome(s, c.surfaceBase))
       .arg(c.textPrimary.name())
       .arg(border.name())
       .arg(selected.name())
@@ -979,7 +981,9 @@ QString tableWidgetStyleImpl(const Style &s) {
       .arg(c.textSecondary.name())
       .arg(readableOn(s, selected).name())
       .arg(borderRule(s, border))
-      .arg(qMin(controlRadius(s), 4));
+      .arg(qMin(controlRadius(s), 4))
+      .arg(chrome(s, c.surfaceRaised))
+      .arg(c.borderSubtle.name());
 }
 
 QString plainTextEditStyleImpl(const Style &s) {

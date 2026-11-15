@@ -1,9 +1,12 @@
 #include "preferences.h"
 #include "../../settings/settingsmanager.h"
+#include "../../theme/colorcontrast.h"
 #include "../../theme/themedefinition.h"
 #include "../../theme/themeengine.h"
 #include "../mainwindow.h"
+#include "../uistylehelper.h"
 #include "styleddialog.h"
+#include <QStackedWidget>
 
 #include <QColorDialog>
 #include <QFormLayout>
@@ -49,7 +52,7 @@ protected:
     qreal r = m_def.ui.borderRadius;
     QRectF full = rect().adjusted(1, 1, -1, -1);
 
-    p.setPen(QPen(c.accentPrimary, 1));
+    p.setPen(QPen(c.borderDefault, 1));
     p.setBrush(c.surfaceBase);
     p.drawRoundedRect(full, r, r);
 
@@ -60,7 +63,7 @@ protected:
     p.setPen(c.textPrimary);
     p.setFont(QFont("Monospace", 9, QFont::Bold));
     p.drawText(tb.adjusted(8, 0, 0, 0), Qt::AlignVCenter,
-               "▶ " + m_def.name.toUpper());
+               m_def.name + "  /  preview.py");
     qreal dx = tb.right() - 10;
     for (const QColor &d : {c.statusError, c.statusWarning, c.statusSuccess}) {
       p.setBrush(d);
@@ -92,7 +95,7 @@ protected:
       }
       y += lh;
     };
-    line({{"// lightpad > hacker mode", c.syntaxComment}});
+    line({{"# Your next idea starts here", c.syntaxComment}});
     line({{"def ", c.syntaxKeyword},
           {"compile", c.syntaxFunction},
           {"(", c.textPrimary},
@@ -106,7 +109,7 @@ protected:
           {"path", c.textPrimary}});
 
     QRectF bar(body.left() + 10, y + 2, body.width() - 20, 2);
-    p.setBrush(c.accentPrimary);
+    p.setBrush(c.borderSubtle);
     p.setPen(Qt::NoPen);
     p.drawRoundedRect(bar, 1, 1);
 
@@ -123,7 +126,7 @@ protected:
       p.setBrush(s.second);
       p.setPen(QPen(c.borderSubtle, 1));
       p.drawRoundedRect(rc, 2, 2);
-      p.setPen(c.textMuted);
+      p.setPen(ColorContrast::bestOf(s.second, {c.textPrimary, c.textInverse}));
       p.drawText(rc, Qt::AlignCenter, s.first);
       cx += cellW + 3;
     }
@@ -615,7 +618,7 @@ public:
 
       auto *desc = new QLabel(entry.description, textWrap);
       desc->setWordWrap(true);
-      desc->setStyleSheet("color: palette(mid);");
+      desc->setProperty("lightpadDescription", true);
       textLayout->addWidget(desc);
 
       rowLayout->addWidget(textWrap, 1);
@@ -715,8 +718,8 @@ Preferences::Preferences(MainWindow *parent)
   setAttribute(Qt::WA_DeleteOnClose, true);
   setWindowTitle("Preferences");
 
-  setMinimumSize(660, 560);
-  resize(740, 700);
+  setMinimumSize(760, 560);
+  resize(980, 760);
 
   buildUi();
   loadCurrentSettings();
@@ -726,19 +729,20 @@ Preferences::Preferences(MainWindow *parent)
 
 Preferences::~Preferences() = default;
 
-QWidget *Preferences::createSectionHeader(const QString &title) {
-  auto *label = new QLabel(title, this);
-  label->setStyleSheet(kSectionHeaderStyle);
-  return label;
-}
-
-QWidget *Preferences::createSeparator() {
-  auto *line = new QFrame(this);
-  line->setFrameShape(QFrame::HLine);
-  line->setFrameShadow(QFrame::Sunken);
-  Theme theme = m_mainWindow->getTheme();
-  line->setStyleSheet(QString("color: %1;").arg(theme.borderColor.name()));
-  return line;
+void Preferences::updateFontPreview() {
+  const auto &c = ThemeEngine::instance().activeTheme().colors;
+  const QFont font = m_mainWindow->getFont();
+  QString family = font.family();
+  family.replace("\\", "\\\\");
+  family.replace("\"", "\\\"");
+  m_fontPreview->setFont(font);
+  m_fontPreview->setStyleSheet(
+      QString("QLabel { background: %1; color: %2; border: 1px solid %3; "
+              "border-radius: 6px; padding: 16px; font-family: \"%4\"; "
+              "font-size: %5pt; }")
+          .arg(c.editorBg.name(), c.editorFg.name(), c.borderDefault.name(),
+               family)
+          .arg(qMax(6, font.pointSize())));
 }
 
 QToolButton *Preferences::createColorSwatch(const QColor &color) {
@@ -753,18 +757,55 @@ void Preferences::buildUi() {
   auto *outerLayout = new QVBoxLayout(this);
   outerLayout->setContentsMargins(0, 0, 0, 12);
 
-  auto *scrollArea = new QScrollArea(this);
-  scrollArea->setWidgetResizable(true);
-  scrollArea->setFrameShape(QFrame::NoFrame);
-  scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  auto *heading = new QLabel(tr("Preferences"), this);
+  heading->setContentsMargins(20, 16, 20, 0);
+  outerLayout->addWidget(heading);
+  auto *description = new QLabel(tr("Make this workspace your own."), this);
+  description->setContentsMargins(20, 0, 20, 12);
+  outerLayout->addWidget(description);
 
-  auto *scrollWidget = new QWidget();
-  auto *mainLayout = new QVBoxLayout(scrollWidget);
-  mainLayout->setContentsMargins(20, 16, 20, 16);
-  mainLayout->setSpacing(8);
+  auto *body = new QHBoxLayout();
+  body->setContentsMargins(12, 0, 12, 0);
+  body->setSpacing(12);
+  auto *navigation = new QListWidget(this);
+  navigation->setObjectName("preferencesNavigation");
+  navigation->setAccessibleName(tr("Settings categories"));
+  navigation->setFixedWidth(160);
+  navigation->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  auto *pages = new QStackedWidget(this);
+  body->addWidget(navigation);
+  body->addWidget(pages, 1);
+  outerLayout->addLayout(body, 1);
+  connect(navigation, &QListWidget::currentRowChanged, pages,
+          &QStackedWidget::setCurrentIndex);
 
-  mainLayout->addWidget(createSectionHeader("◆ THEME"));
-  mainLayout->addWidget(createSeparator());
+  const auto addPage = [&](const QString &name, const QString &hint) {
+    navigation->addItem(name);
+    auto *scroll = new QScrollArea(pages);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto *content = new QWidget(scroll);
+    auto *layout = new QVBoxLayout(content);
+    layout->setContentsMargins(16, 12, 16, 20);
+    layout->setSpacing(14);
+    layout->setAlignment(Qt::AlignTop);
+    auto *title = new QLabel(name, content);
+    title->setProperty("preferencesHeading", true);
+    layout->addWidget(title);
+    auto *subtitle = new QLabel(hint, content);
+    subtitle->setWordWrap(true);
+    subtitle->setProperty("lightpadDescription", true);
+    layout->addWidget(subtitle);
+    layout->addSpacing(8);
+    scroll->setWidget(content);
+    pages->addWidget(scroll);
+    return layout;
+  };
+
+  auto *mainLayout =
+      addPage(tr("Appearance"),
+              tr("Choose a palette and adjust the feel of the interface."));
   mainLayout->addWidget(buildThemeSection());
   {
     auto *fxGrid = new QGridLayout();
@@ -811,8 +852,8 @@ void Preferences::buildUi() {
   }
   mainLayout->addSpacing(8);
 
-  mainLayout->addWidget(createSectionHeader("◆ FONT"));
-  mainLayout->addWidget(createSeparator());
+  mainLayout = addPage(tr("Typography"),
+                       tr("Choose a comfortable font and size for your code."));
 
   auto *fontRow = new QHBoxLayout();
   fontRow->setSpacing(10);
@@ -849,8 +890,9 @@ void Preferences::buildUi() {
 
   mainLayout->addSpacing(8);
 
-  mainLayout->addWidget(createSectionHeader("◆ EDITOR"));
-  mainLayout->addWidget(createSeparator());
+  mainLayout =
+      addPage(tr("Editor"),
+              tr("Control indentation and what happens when files are saved."));
 
   auto *tabRow = new QHBoxLayout();
   auto *tabLabel = new QLabel("Tab width", this);
@@ -861,6 +903,19 @@ void Preferences::buildUi() {
   tabRow->addWidget(m_tabWidthCombo);
   tabRow->addStretch();
   mainLayout->addLayout(tabRow);
+
+  auto *spacesCheck =
+      new QCheckBox(tr("Insert spaces instead of tab characters"), this);
+  spacesCheck->setChecked(
+      SettingsManager::instance().getValue("insertSpaces", true).toBool());
+  spacesCheck->setToolTip(tr("Tab aligns to the next tab stop. Python uses "
+                             "spaces; Makefiles use tabs."));
+  connect(spacesCheck, &QCheckBox::toggled, this, [](bool enabled) {
+    auto &settings = SettingsManager::instance();
+    settings.setValue("insertSpaces", enabled);
+    settings.saveSettings();
+  });
+  mainLayout->addWidget(spacesCheck);
 
   m_autoIndentCheck = new QCheckBox("Enable automatic indentation", this);
   mainLayout->addWidget(m_autoIndentCheck);
@@ -877,8 +932,8 @@ void Preferences::buildUi() {
 
   mainLayout->addSpacing(8);
 
-  mainLayout->addWidget(createSectionHeader("◆ DISPLAY"));
-  mainLayout->addWidget(createSeparator());
+  mainLayout = addPage(
+      tr("Display"), tr("Choose the visual guides you want beside your code."));
 
   m_lineNumbersCheck = new QCheckBox("Show line numbers", this);
   mainLayout->addWidget(m_lineNumbersCheck);
@@ -897,8 +952,8 @@ void Preferences::buildUi() {
 
   mainLayout->addSpacing(8);
 
-  mainLayout->addWidget(createSectionHeader("◆ THEME TOKENS"));
-  mainLayout->addWidget(createSeparator());
+  mainLayout = addPage(
+      tr("Colors"), tr("Fine-tune individual colors in the current palette."));
 
   auto *colorGrid = new QGridLayout();
   colorGrid->setHorizontalSpacing(16);
@@ -929,23 +984,45 @@ void Preferences::buildUi() {
 
   mainLayout->addStretch();
 
-  scrollArea->setWidget(scrollWidget);
-  outerLayout->addWidget(scrollArea);
+  navigation->setCurrentRow(0);
 
   auto *buttonRow = new QHBoxLayout();
   buttonRow->setContentsMargins(20, 0, 20, 0);
+  auto *saveNotice = new QLabel(tr("Changes are saved automatically"), this);
+  buttonRow->addWidget(saveNotice);
   buttonRow->addStretch();
   auto *closeBtn = new QToolButton(this);
   closeBtn->setText("Close");
   closeBtn->setCursor(Qt::PointingHandCursor);
-  closeBtn->setStyleSheet(
-      QString("QToolButton { border: 1px solid %1; border-radius: 4px; "
-              "padding: 4px 16px; }"
-              "QToolButton:hover { background-color: %2; }")
-          .arg(theme.borderColor.name(), theme.surfaceAltColor.name()));
   connect(closeBtn, &QToolButton::clicked, this, &QDialog::close);
   buttonRow->addWidget(closeBtn);
   outerLayout->addLayout(buttonRow);
+
+  // Local styles must follow live palette changes as well as application QSS.
+  const auto refreshAppearance = [this, navigation, heading, description,
+                                  saveNotice](
+                                     const ThemeDefinition &definition) {
+    const auto &c = definition.colors;
+    setStyleSheet(UIStyleHelper::formDialogStyle(definition) +
+                  UIStyleHelper::lineEditStyle(definition) +
+                  UIStyleHelper::comboBoxStyle(definition) +
+                  UIStyleHelper::spinBoxStyle(definition) +
+                  UIStyleHelper::checkBoxStyle(definition) +
+                  QString("QLabel[preferencesHeading=\"true\"] { "
+                          "font-size: 18px; font-weight: 600; color: %1; }")
+                      .arg(c.textPrimary.name()));
+    heading->setStyleSheet(UIStyleHelper::headingStyle(definition, 24));
+    description->setStyleSheet(UIStyleHelper::subduedLabelStyle(definition));
+    saveNotice->setStyleSheet(UIStyleHelper::subduedLabelStyle(definition));
+    navigation->setStyleSheet(
+        UIStyleHelper::listWidgetStyle(definition) +
+        "QListWidget::item { padding: 10px 12px; margin: 2px; }");
+    m_themeList->setStyleSheet(UIStyleHelper::listWidgetStyle(definition));
+    updateFontPreview();
+  };
+  connect(&ThemeEngine::instance(), &ThemeEngine::themeChanged, this,
+          refreshAppearance);
+  refreshAppearance(ThemeEngine::instance().activeTheme());
 }
 
 void Preferences::loadCurrentSettings() {
@@ -958,9 +1035,7 @@ void Preferences::loadCurrentSettings() {
 
   m_fontFamilyCombo->setCurrentFont(textSettings.mainFont);
   m_fontSizeSpinner->setValue(textSettings.mainFont.pointSize());
-  QFont previewFont = textSettings.mainFont;
-  previewFont.setPointSize(textSettings.mainFont.pointSize());
-  m_fontPreview->setFont(previewFont);
+  updateFontPreview();
 
   int tabWidth = textSettings.tabWidth;
   int idx = m_tabWidthCombo->findText(QString::number(tabWidth));
@@ -1123,7 +1198,7 @@ void Preferences::onFontFamilyChanged(const QFont &font) {
   QFont newFont = m_mainWindow->getFont();
   newFont.setFamily(font.family());
   m_mainWindow->setFont(newFont);
-  m_fontPreview->setFont(newFont);
+  updateFontPreview();
   persistAll();
 }
 
@@ -1134,7 +1209,7 @@ void Preferences::onFontSizeChanged(int size) {
   QFont newFont = m_mainWindow->getFont();
   newFont.setPointSize(size);
   m_mainWindow->setFont(newFont);
-  m_fontPreview->setFont(newFont);
+  updateFontPreview();
   persistAll();
 }
 
@@ -1327,7 +1402,7 @@ QWidget *Preferences::buildThemeSection() {
          "deleted."),
       rightWrap);
   saveHint->setWordWrap(true);
-  saveHint->setStyleSheet("color: palette(mid);");
+  saveHint->setProperty("lightpadDescription", true);
   rightLayout->addWidget(saveHint);
 
   row->addWidget(rightWrap, 1);

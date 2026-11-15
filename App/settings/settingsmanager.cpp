@@ -34,6 +34,7 @@ void SettingsManager::initializeDefaults() {
   m_defaults["matchingBracketsHighlighted"] = true;
   m_defaults["inlineBlameEnabled"] = false;
   m_defaults["tabWidth"] = 4;
+  m_defaults["insertSpaces"] = true;
   m_defaults["trimTrailingWhitespace"] = false;
   m_defaults["insertFinalNewline"] = false;
   m_defaults["autoSaveFiles"] = true;

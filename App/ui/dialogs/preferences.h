@@ -34,8 +34,7 @@ private:
   void refreshThemeSwatches();
   void applyEditedTheme(const QString &activeThemeName);
 
-  QWidget *createSectionHeader(const QString &title);
-  QWidget *createSeparator();
+  void updateFontPreview();
   QToolButton *createColorSwatch(const QColor &color);
   QWidget *buildThemeSection();
 

@@ -24,6 +24,7 @@ Theme classicThemeFromDefinition(const ThemeDefinition &themeDefinition) {
   theme.functionFormat = c.syntaxFunction;
   theme.quotationFormat = c.syntaxString;
   theme.classFormat = c.syntaxClass;
+  theme.typeFormat = c.syntaxType;
   theme.numberFormat = c.syntaxNumber;
 
   theme.surfaceColor = c.surfaceRaised;

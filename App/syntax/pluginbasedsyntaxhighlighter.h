@@ -4,6 +4,7 @@
 #include "../plugins/isyntaxplugin.h"
 #include "../settings/theme.h"
 #include <QRegularExpression>
+#include <QSet>
 #include <QSyntaxHighlighter>
 #include <QTextCharFormat>
 #include <QVector>
@@ -35,6 +36,13 @@ private:
 
   QTextCharFormat applyThemeToFormat(const SyntaxRule &rule,
                                      const Theme &theme);
+
+  void refreshTypeNames();
+  QVector<SyntaxRule> m_typeDefinitions;
+  QSet<QString> m_typeNames;
+  bool m_singleQuotedStrings = false;
+  int m_typeRevision = -1;
+  bool m_typeRefreshPending = false;
 
   Theme m_theme;
   QString m_searchKeyword;

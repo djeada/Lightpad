@@ -1,4 +1,5 @@
 #include "lightpadtabwidget.h"
+#include "../ui/tabnavigation.h"
 #include "../theme/colorcontrast.h"
 #include "../ui/mainwindow.h"
 #include "lightpadpage.h"
@@ -83,6 +84,11 @@ void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
     menu.addSeparator();
   }
 
+  QAction *moveLeft = menu.addAction(tr("Move Tab Left"));
+  QAction *moveRight = menu.addAction(tr("Move Tab Right"));
+  moveLeft->setEnabled(index > 0);
+  moveRight->setEnabled(index < count() - 2);
+  menu.addSeparator();
   QAction *closeAction = menu.addAction(tr("Close Tab"));
   QAction *closeOthersAction = menu.addAction(tr("Close Other Tabs"));
   QAction *closeToRightAction = menu.addAction(tr("Close Tabs to the Right"));
@@ -112,7 +118,11 @@ void LightpadTabBar::contextMenuEvent(QContextMenuEvent *event) {
 
   QAction *selectedAction = menu.exec(event->globalPos());
 
-  if (selectedAction == closeAction) {
+  if (selectedAction == moveLeft) {
+    moveTab(index, index - 1);
+  } else if (selectedAction == moveRight) {
+    moveTab(index, index + 1);
+  } else if (selectedAction == closeAction) {
     emit closeTab(index);
   } else if (selectedAction == closeOthersAction) {
     emit closeOtherTabs(index);
@@ -157,6 +167,7 @@ LightpadTabWidget::LightpadTabWidget(QWidget *parent) : QTabWidget(parent) {
 
   setTabsClosable(true);
   setMovable(true);
+  TabNavigation::install(this);
 
   newTabButton = new QToolButton(this);
   newTabButton->setObjectName("AddTabButton");

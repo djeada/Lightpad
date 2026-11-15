@@ -238,6 +238,7 @@ private slots:
   void testCloseOtherTabsRespectsGuard();
   void testCloseCurrentGroupCancelledByGuard();
   void testUnsplitAllCancelledByGuard();
+  void testKeyboardTabReorderingKeepsDocumentsAndSentinel();
   void testLongTabsLeaveRoomForOtherFiles();
   void testNestedSplittersKeepUsableGrabAreas();
   void testManyTabsScrollAndKeepNewTabVisible();
@@ -513,6 +514,36 @@ void TestSplitEditorContainer::testUnsplitAllCancelledByGuard() {
   QVERIFY(!container.unsplitAll());
   QCOMPARE(container.groupCount(), 2);
   QVERIFY(container.hasSplits());
+}
+
+void TestSplitEditorContainer::
+    testKeyboardTabReorderingKeepsDocumentsAndSentinel() {
+  LightpadTabWidget tabs;
+  auto *first = new LightpadPage(&tabs);
+  auto *second = new LightpadPage(&tabs);
+  tabs.insertTab(tabs.count() - 1, first, "first.cpp");
+  tabs.insertTab(tabs.count() - 1, second, "second.sql");
+  QWidget *sentinel = tabs.widget(tabs.count() - 1);
+  tabs.setFilePath(tabs.indexOf(first), "first.cpp");
+  tabs.setFilePath(tabs.indexOf(second), "second.sql");
+  tabs.setCurrentWidget(first);
+  tabs.resize(800, 400);
+  tabs.show();
+  tabs.activateWindow();
+  tabs.setFocus();
+  QTest::qWait(20);
+  QTest::keyClick(&tabs, Qt::Key_PageDown,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QTRY_COMPARE(tabs.widget(1), first);
+  QCOMPARE(tabs.currentWidget(), first);
+  QCOMPARE(tabs.getFilePath(1), QString("first.cpp"));
+  QTest::keyClick(&tabs, Qt::Key_PageDown,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(tabs.widget(tabs.count() - 1), sentinel);
+  QCOMPARE(tabs.currentWidget(), first);
+  QTest::keyClick(&tabs, Qt::Key_PageUp, Qt::ControlModifier);
+  QTRY_COMPARE(tabs.currentWidget(), second);
+  QCOMPARE(tabs.getFilePath(0), QString("second.sql"));
 }
 
 void TestSplitEditorContainer::testLongTabsLeaveRoomForOtherFiles() {

@@ -294,7 +294,7 @@ Autosave skips previews for the same reason.
 ### Line Numbers
 
 Line numbers are displayed by default. Toggle them in:
-- **Preferences** → **Editor** → **Show line numbers**
+- **Preferences** → **Display** → **Show line numbers**
 
 ### Auto-Indentation
 
@@ -308,7 +308,11 @@ Backspace within leading spaces or tabs returns to the previous indentation
 stop. With a tab width of 4, eight leading spaces become four, and six become
 four. After code, Backspace keeps its normal character deletion behavior.
 Enter and indentation deletion also work with multiple cursors and undo in
-one step. Python's new indentation uses spaces.
+one step. Tab indents selected lines and Shift+Tab outdents them, preserving the
+selection direction and leaving an unselected following line untouched. Without
+a selection, Tab advances to the next tab stop when spaces are enabled. Select
+**Preferences → Editor → Insert spaces instead of tab characters** to choose
+your indentation style. Python uses spaces and Makefiles use literal tabs.
 
 Configure the indentation width and automatic indentation in:
 - **Preferences** → **Editor** → **Auto indent**
@@ -317,12 +321,12 @@ Configure the indentation width and automatic indentation in:
 ### Bracket Matching
 
 Matching brackets are highlighted when the cursor is on a bracket. Toggle:
-- **Preferences** → **Editor** → **Highlight matching brackets**
+- **Preferences** → **Display** → **Highlight matching brackets**
 
 ### Current Line Highlighting
 
 The current line is subtly highlighted. Toggle:
-- **Preferences** → **Editor** → **Highlight current line**
+- **Preferences** → **Display** → **Highlight current line**
 
 ### Git Blame Annotations
 
@@ -350,9 +354,21 @@ SQL Server, PostgreSQL or MySQL/MariaDB - directly or inside a Docker
 container - browse tables, run SQL from `.sql` files (`F9`) or the console, and
 inspect, export and profile results. See [DATABASE_TOOLS.md](DATABASE_TOOLS.md).
 
+The SQL console shares the editor's tab width and spaces/tabs preference. Tab and Shift+Tab indent or outdent selected lines; Enter preserves
+indentation, and Backspace in leading whitespace returns to the previous tab
+stop. Ctrl+Enter runs the selection when one is active, including multiline
+selections, and Ctrl+Shift+Enter runs the whole script.
+
+Drag editor or result tabs to reorder them. Ctrl+PageUp/PageDown switches tabs;
+Ctrl+Shift+PageUp/PageDown moves the current tab left or right. In the Database
+panel these shortcuts operate on result tabs.
+
 ### Autocompletion
 
-Trigger autocompletion with `Ctrl+Space`. See [AUTOCOMPLETION.md](../App/AUTOCOMPLETION.md) for details.
+Trigger autocompletion with `Ctrl+Space`. Enter or Tab accepts a highlighted
+suggestion. Selecting text or pressing Shift+Tab dismisses the popup so you
+can indent or outdent selected lines. See
+[AUTOCOMPLETION.md](../App/AUTOCOMPLETION.md) for details.
 
 ## Recover Unsaved Work
 

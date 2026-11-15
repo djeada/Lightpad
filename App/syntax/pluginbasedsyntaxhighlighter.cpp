@@ -1,6 +1,7 @@
 #include "pluginbasedsyntaxhighlighter.h"
 #include "../core/logging/logger.h"
 #include <QBitArray>
+#include <QTimer>
 #include <functional>
 
 PluginBasedSyntaxHighlighter::PluginBasedSyntaxHighlighter(
@@ -16,6 +17,11 @@ PluginBasedSyntaxHighlighter::PluginBasedSyntaxHighlighter(
   }
 
   loadRulesFromPlugin(plugin, theme);
+  if (document() && !m_typeDefinitions.isEmpty()) {
+    connect(document(), &QTextDocument::contentsChanged, this,
+            &PluginBasedSyntaxHighlighter::refreshTypeNames,
+            Qt::QueuedConnection);
+  }
 
   m_searchFormat.setBackground(QColor("#646464"));
 }
@@ -85,6 +91,7 @@ enum RuleKind : quint8 {
   RuleInterpolated = 2,
   RuleEscape = 4,
   RuleComment = 8,
+  RuleRaw = 16,
 };
 
 quint8 classifyRuleName(const QString &name) {
@@ -102,6 +109,8 @@ quint8 classifyRuleName(const QString &name) {
   if (name.contains(QLatin1String("comment"), Qt::CaseInsensitive)) {
     kind |= RuleComment;
   }
+  if (name.contains(QLatin1String("raw"), Qt::CaseInsensitive))
+    kind |= RuleRaw;
   return kind;
 }
 } // namespace
@@ -113,12 +122,15 @@ void PluginBasedSyntaxHighlighter::loadRulesFromPlugin(ISyntaxPlugin *plugin,
   }
 
   m_rules = plugin->syntaxRules();
+  m_singleQuotedStrings = plugin->languageId() == "ts";
 
   m_ruleKinds.clear();
   m_ruleKinds.reserve(m_rules.size());
   for (SyntaxRule &rule : m_rules) {
     rule.format = applyThemeToFormat(rule, theme);
     m_ruleKinds.append(classifyRuleName(rule.name));
+    if (rule.name == "type_definition")
+      m_typeDefinitions.append(rule);
   }
 
   m_multiLineBlocks = plugin->multiLineBlocks();
@@ -157,7 +169,7 @@ PluginBasedSyntaxHighlighter::applyThemeToFormat(const SyntaxRule &rule,
     format.setFontWeight(QFont::Normal);
   } else if (ruleName.contains("builtin")) {
     if (ruleName.contains("type") || ruleName.contains("class")) {
-      format.setForeground(theme.classFormat);
+      format.setForeground(theme.typeFormat);
     } else if (ruleName.contains("function")) {
       format.setForeground(theme.keywordFormat_1);
     } else {
@@ -207,8 +219,12 @@ PluginBasedSyntaxHighlighter::applyThemeToFormat(const SyntaxRule &rule,
     format.setForeground(theme.functionFormat);
     format.setFontItalic(false);
     format.setFontWeight(QFont::Normal);
-  } else if (ruleName.contains("class") || ruleName.contains("type") ||
-             ruleName.contains("scope") || ruleName.contains("scoped")) {
+  } else if (ruleName.contains("type")) {
+    format.setForeground(theme.typeFormat);
+    format.setFontItalic(false);
+    format.setFontWeight(QFont::Normal);
+  } else if (ruleName.contains("class") || ruleName.contains("scope") ||
+             ruleName.contains("scoped")) {
     format.setForeground(theme.classFormat);
     format.setFontItalic(false);
     format.setFontWeight(QFont::Normal);
@@ -217,7 +233,48 @@ PluginBasedSyntaxHighlighter::applyThemeToFormat(const SyntaxRule &rule,
   return format;
 }
 
+void PluginBasedSyntaxHighlighter::refreshTypeNames() {
+  if (m_typeDefinitions.isEmpty() || !document() ||
+      m_typeRevision == document()->revision())
+    return;
+  m_typeRevision = document()->revision();
+
+  // Index names once per edit, including declarations outside the viewport.
+  // Preserve offsets while masking literals and comments before matching names.
+  QString code = document()->toPlainText();
+  static const QRegularExpression literals(
+      R"lp(R"(?<delimiter>[^ ()\\\t\r\n]{0,16})\([\s\S]*?\)\k<delimiter>"|r(?<hashes>#*)"[\s\S]*?"\k<hashes>|//[^\n]*|/\*[\s\S]*?(?:\*/|\z)|"(?:\\[\s\S]|[^"\\])*"|'(?:\\.|[^'\\\n])'|`[^`]*`)lp");
+  static const QRegularExpression scriptLiterals(
+      R"lp(//[^\n]*|/\*[\s\S]*?(?:\*/|\z)|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`[^`]*`)lp");
+  auto literal =
+      (m_singleQuotedStrings ? scriptLiterals : literals).globalMatch(code);
+  while (literal.hasNext()) {
+    const auto match = literal.next();
+    for (int i = match.capturedStart(); i < match.capturedEnd(); ++i)
+      if (code[i] != '\n')
+        code[i] = ' ';
+  }
+  QSet<QString> names;
+  for (const auto &rule : m_typeDefinitions) {
+    auto matches = rule.pattern.globalMatch(code);
+    while (matches.hasNext())
+      names.insert(matches.next().captured(rule.captureGroup));
+  }
+  if (names == m_typeNames)
+    return;
+  m_typeNames = names;
+  // An edited declaration can affect references earlier in the document.
+  if (!m_typeRefreshPending) {
+    m_typeRefreshPending = true;
+    QTimer::singleShot(0, this, [this] {
+      m_typeRefreshPending = false;
+      rehighlight();
+    });
+  }
+}
+
 void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
+  refreshTypeNames();
 
   if (text.isEmpty()) {
     setCurrentBlockState(previousBlockState());
@@ -341,7 +398,8 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
                                        trackedCharacters);
         } else {
           applyFormatRange(start, length, rule.format, protect,
-                           trackedCharacters, allowProtected, requiredMask);
+                           (kind & RuleRaw) ? nullptr : trackedCharacters,
+                           allowProtected, requiredMask);
         }
       }
     }
@@ -475,6 +533,37 @@ void PluginBasedSyntaxHighlighter::highlightBlock(const QString &text) {
         return !(kind & (RuleString | RuleComment | RuleEscape));
       },
       false);
+
+  if (!m_typeNames.isEmpty()) {
+    static const QRegularExpression identifier(
+        R"((?<![\w$])[A-Za-z_$][\w$]*(?![\w$]))");
+    auto matches = identifier.globalMatch(text);
+    while (matches.hasNext()) {
+      const auto match = matches.next();
+      const int start = match.capturedStart();
+      if (!m_typeNames.contains(match.captured()) ||
+          protectedCharacters.testBit(start))
+        continue;
+      // A field with the same spelling is not a reference to the type.
+      const QString prefix = text.left(start).trimmed();
+      if (prefix.endsWith('.') || prefix.endsWith("->"))
+        continue;
+      QTextCharFormat typeFormat;
+      typeFormat.setForeground(m_theme.typeFormat);
+      typeFormat.setFontWeight(QFont::Normal);
+      applyFormatRange(start, match.capturedLength(), typeFormat, false);
+    }
+    // Declarations retain their stronger weight, including tuple structs.
+    for (const auto &rule : m_typeDefinitions) {
+      auto matches = rule.pattern.globalMatch(text);
+      while (matches.hasNext()) {
+        const auto match = matches.next();
+        applyFormatRange(match.capturedStart(rule.captureGroup),
+                         match.capturedLength(rule.captureGroup), rule.format,
+                         false);
+      }
+    }
+  }
 
   if (!m_searchKeyword.isEmpty()) {
 

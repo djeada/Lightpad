@@ -111,7 +111,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "\"; font-size: 13px; "
       "}"
       "QDialog { background-color: " +
-      bgColor + "; border: 1px solid " + accentColor +
+      bgColor + "; border: 1px solid " + borderColor +
       "; }"
 
       "QMenu { "
@@ -408,16 +408,14 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "}"
 
       "QHeaderView::section { "
-      "background-color: transparent; "
+      "background-color: " + surfaceColor + "; "
       "color: " +
       secondaryText +
       "; "
       "padding: 5px 10px; "
       "border: none; "
       "font-weight: 600; "
-      "text-transform: uppercase; "
       "font-size: 12px; "
-      "letter-spacing: 1px; "
       "}"
 
       "QLineEdit { "
@@ -762,7 +760,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "; "
       "padding: 7px 16px; "
       "border: none; "
-      "border-bottom: 3px solid transparent; "
+      "border-bottom: 2px solid transparent; "
       "font-weight: 500; "
       "}"
       "QTabBar::tab:selected { "
@@ -772,7 +770,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "background-color: " +
       tabActiveBg +
       "; "
-      "border-bottom: 3px solid " +
+      "border-bottom: 2px solid " +
       accentColor +
       "; "
       "}"
@@ -783,7 +781,7 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "background-color: " +
       accentSoftColor +
       "; "
-      "border-bottom: 3px solid " +
+      "border-bottom: 2px solid " +
       accentSoftColor +
       "; "
       "}"

@@ -5,6 +5,7 @@
 #include "ui/panels/dbresultview.h"
 #include "ui/panels/sqlconsoleedit.h"
 
+#include "ui/tabnavigation.h"
 #include <QClipboard>
 #include <QCompleter>
 #include <QDialog>
@@ -13,6 +14,8 @@
 #include <QMenu>
 #include <QScopeGuard>
 #include <QTemporaryDir>
+#include <QTextBlock>
+#include <QTextLayout>
 #include <QTimer>
 #include <QtTest/QtTest>
 
@@ -76,6 +79,10 @@ private slots:
 
   void insightsListsEveryColumn();
 
+  void consoleIndentationAndSelection();
+  void consoleCompletionDoesNotReplaceSelection();
+  void consoleMultilineSyntax();
+  void tabNavigationPreservesWidgets();
   void consoleFindsStatementUnderCaret();
   void consoleRunShortcuts();
   void consoleHistoryShortcut();
@@ -285,6 +292,112 @@ void TestDatabasePanel::consoleFindsStatementUnderCaret() {
   c.setPosition(8, QTextCursor::KeepAnchor);
   edit.setTextCursor(c);
   QCOMPARE(edit.selectionOrCurrentStatement(), QString("SELECT 1"));
+}
+
+void TestDatabasePanel::consoleIndentationAndSelection() {
+  SqlConsoleEdit edit;
+  edit.setTabWidth(2);
+  edit.show();
+  edit.setFocus();
+  edit.setPlainText("SELECT a,\n       b\nFROM items;");
+  QTextCursor c = edit.textCursor();
+  c.setPosition(19); // start of FROM, which must not be indented
+  c.setPosition(0, QTextCursor::KeepAnchor);
+  edit.setTextCursor(c);
+  const QString before = edit.toPlainText();
+  QTest::keyClick(&edit, Qt::Key_Tab);
+  QCOMPARE(edit.toPlainText(), QString("  SELECT a,\n         b\nFROM items;"));
+  QVERIFY(edit.textCursor().hasSelection());
+  QVERIFY(edit.textCursor().position() < edit.textCursor().anchor());
+  QTest::keyClick(&edit, Qt::Key_Backtab);
+  QCOMPARE(edit.toPlainText(), before);
+  edit.undo();
+  QCOMPARE(edit.toPlainText(), QString("  SELECT a,\n         b\nFROM items;"));
+  edit.setPlainText("  SELECT (");
+  edit.moveCursor(QTextCursor::End);
+  QTest::keyClick(&edit, Qt::Key_Return);
+  QCOMPARE(edit.toPlainText(), QString("  SELECT (\n    "));
+  QTest::keyClick(&edit, Qt::Key_Backspace);
+  QCOMPARE(edit.toPlainText(), QString("  SELECT (\n  "));
+  edit.setReadOnly(true);
+  QTest::keyClick(&edit, Qt::Key_Tab);
+  QCOMPARE(edit.toPlainText(), QString("  SELECT (\n  "));
+}
+
+void TestDatabasePanel::consoleCompletionDoesNotReplaceSelection() {
+  SqlConsoleEdit edit;
+  edit.setTabWidth(4);
+  edit.show();
+  edit.setFocus();
+  edit.setPlainText("SEL");
+  edit.moveCursor(QTextCursor::End);
+  QTest::keyClick(&edit, Qt::Key_Space, Qt::ControlModifier);
+  auto *completer = edit.findChild<QCompleter *>();
+  QVERIFY(completer);
+  QTRY_VERIFY(completer->popup()->isVisible());
+  edit.selectAll();
+  QVERIFY(!completer->popup()->isVisible());
+  QTest::keyClick(&edit, Qt::Key_Tab);
+  QCOMPARE(edit.toPlainText(), QString("    SEL"));
+  QSignalSpy run(&edit, &SqlConsoleEdit::runStatementRequested);
+  const QString selection = edit.selectionOrCurrentStatement();
+  QTest::keyClick(&edit, Qt::Key_Return, Qt::ControlModifier);
+  QCOMPARE(run.count(), 1);
+  QCOMPARE(edit.selectionOrCurrentStatement(), selection);
+}
+
+void TestDatabasePanel::consoleMultilineSyntax() {
+  QTextDocument document;
+  SqlHighlighter highlighter(&document);
+  const Theme theme = testTheme();
+  highlighter.setTheme(theme);
+  document.setPlainText(
+      "SELECT 'hello\nSELECT -- still string\nworld'; SELECT 1;\n"
+      "SELECT [a]]b\nFROM still identifier];");
+  highlighter.rehighlight();
+  const auto colorAt = [&](int block, int column) {
+    for (const auto &range :
+         document.findBlockByNumber(block).layout()->formats())
+      if (column >= range.start && column < range.start + range.length)
+        return range.format.foreground().color();
+    return QColor();
+  };
+  QCOMPARE(colorAt(1, 0), theme.quotationFormat);
+  QCOMPARE(colorAt(2, 8), theme.keywordFormat_0);
+  QCOMPARE(colorAt(4, 0), theme.classFormat);
+  QCOMPARE(document.lastBlock().userState(), 0);
+}
+
+void TestDatabasePanel::tabNavigationPreservesWidgets() {
+  QTabWidget tabs;
+  auto *first = new QWidget;
+  auto *second = new QWidget;
+  auto *sentinel = new QWidget;
+  tabs.addTab(first, "one");
+  tabs.addTab(second, "two");
+  tabs.addTab(sentinel, "hidden");
+  tabs.setTabEnabled(2, false);
+  tabs.tabBar()->setTabVisible(2, false);
+  tabs.setCurrentWidget(first);
+  TabNavigation::step(&tabs, 1, true);
+  QCOMPARE(tabs.widget(1), first);
+  QCOMPARE(tabs.currentWidget(), first);
+  QCOMPARE(tabs.tabText(1), QString("one"));
+  TabNavigation::step(&tabs, 1, true);
+  QCOMPARE(tabs.widget(2), sentinel);
+  TabNavigation::step(&tabs, -1, false);
+  QCOMPARE(tabs.currentWidget(), second);
+  TabNavigation::install(&tabs);
+  tabs.show();
+  tabs.activateWindow();
+  tabs.setFocus();
+  QTest::qWait(20);
+  QTest::keyClick(&tabs, Qt::Key_PageDown, Qt::ControlModifier);
+  QTRY_COMPARE(tabs.currentWidget(), first);
+  QTest::keyClick(&tabs, Qt::Key_PageUp,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QTRY_COMPARE(tabs.widget(0), first);
+  QCOMPARE(tabs.currentWidget(), first);
 }
 
 void TestDatabasePanel::consoleRunShortcuts() {

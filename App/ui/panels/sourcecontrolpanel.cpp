@@ -149,7 +149,7 @@ void SourceControlPanel::setupUI() {
 
   m_headerWidget = new QWidget(this);
   QHBoxLayout *headerLayout = new QHBoxLayout(m_headerWidget);
-  headerLayout->setContentsMargins(8, 4, 8, 4);
+  headerLayout->setContentsMargins(12, 8, 12, 8);
 
   m_headerTitleLabel = new QLabel(tr("Source Control"), m_headerWidget);
   m_headerTitleLabel->setSizePolicy(QSizePolicy::Ignored,
@@ -222,8 +222,9 @@ void SourceControlPanel::setupUI() {
 void SourceControlPanel::setupNoRepoUI() {
   m_noRepoWidget = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(m_noRepoWidget);
-  layout->setContentsMargins(20, 40, 20, 20);
-  layout->setSpacing(16);
+  layout->setContentsMargins(24, 24, 24, 24);
+  layout->setSpacing(12);
+  layout->addStretch();
 
   m_noRepoLabel = new QLabel(tr("No Git Repository"), m_noRepoWidget);
   m_noRepoLabel->setAlignment(Qt::AlignCenter);
@@ -325,7 +326,7 @@ void SourceControlPanel::setupRepoUI() {
 
   m_branchSection = new QWidget(m_repoWidget);
   QVBoxLayout *branchLayout = new QVBoxLayout(m_branchSection);
-  branchLayout->setContentsMargins(8, 8, 8, 8);
+  branchLayout->setContentsMargins(12, 12, 12, 12);
   branchLayout->setSpacing(6);
 
   QHBoxLayout *branchHeaderLayout = new QHBoxLayout();
@@ -488,7 +489,7 @@ void SourceControlPanel::setupRepoUI() {
 
   m_commitSection = new QWidget(m_repoWidget);
   QVBoxLayout *commitLayout = new QVBoxLayout(m_commitSection);
-  commitLayout->setContentsMargins(8, 10, 8, 10);
+  commitLayout->setContentsMargins(12, 12, 12, 12);
   commitLayout->setSpacing(8);
 
   m_commitHeaderLabel = new QLabel(tr("Commit Message"), m_commitSection);
@@ -529,7 +530,7 @@ void SourceControlPanel::setupRepoUI() {
 
   m_stagedHeader = new QWidget(m_repoWidget);
   QHBoxLayout *stagedHeaderLayout = new QHBoxLayout(m_stagedHeader);
-  stagedHeaderLayout->setContentsMargins(8, 6, 8, 6);
+  stagedHeaderLayout->setContentsMargins(12, 8, 12, 8);
 
   m_stagedLabel = new QLabel(tr("Staged Changes"), m_stagedHeader);
   m_stagedLabel->setMinimumWidth(0);
@@ -573,7 +574,7 @@ void SourceControlPanel::setupRepoUI() {
 
   m_changesHeader = new QWidget(m_repoWidget);
   QHBoxLayout *changesHeaderLayout = new QHBoxLayout(m_changesHeader);
-  changesHeaderLayout->setContentsMargins(8, 6, 8, 6);
+  changesHeaderLayout->setContentsMargins(12, 8, 12, 8);
 
   m_changesLabel = new QLabel(tr("Changes"), m_changesHeader);
   m_changesLabel->setMinimumWidth(0);
@@ -2659,11 +2660,13 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     m_stagedLabel->setStyleSheet(UIStyleHelper::headingStyle(theme, 12));
   }
   if (m_unstageAllButton) {
-    m_unstageAllButton->setStyleSheet(
-        outlineHeaderButtonStyle(theme, theme.errorColor, strongGlyph));
+    m_unstageAllButton->setStyleSheet(outlineHeaderButtonStyle(
+        theme, UIStyleHelper::secondaryTextColor(theme), strongGlyph));
   }
   if (m_stagedTree) {
-    m_stagedTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
+    m_stagedTree->setStyleSheet(
+        UIStyleHelper::treeWidgetStyle(theme) +
+        "QTreeWidget { border: none; border-radius: 0; }");
   }
 
   if (m_changesHeader) {
@@ -2684,7 +2687,9 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
         QStringLiteral("font-size: 12px; padding: 0;")));
   }
   if (m_changesTree) {
-    m_changesTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
+    m_changesTree->setStyleSheet(
+        UIStyleHelper::treeWidgetStyle(theme) +
+        "QTreeWidget { border: none; border-radius: 0; }");
   }
 
   if (m_historyHeader) {
@@ -2717,7 +2722,9 @@ void SourceControlPanel::applyTheme(const Theme &theme) {
     m_historySearchEdit->setStyleSheet(UIStyleHelper::lineEditStyle(theme));
   }
   if (m_historyTree) {
-    m_historyTree->setStyleSheet(UIStyleHelper::treeWidgetStyle(theme));
+    m_historyTree->setStyleSheet(
+        UIStyleHelper::treeWidgetStyle(theme) +
+        "QTreeWidget { border: none; border-radius: 0; }");
   }
 
   m_commitButton->setProperty("uiRole", "primary");

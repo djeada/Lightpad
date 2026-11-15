@@ -5,6 +5,57 @@
 class TestIndentation : public QObject {
   Q_OBJECT
 private slots:
+  void selectedTabsKeepDirectionAndUndo() {
+    QTextDocument doc("one\ntwo\nthree");
+    QTextCursor c(&doc);
+    c.setPosition(8);
+    c.setPosition(0, QTextCursor::KeepAnchor);
+    EditorIndentation::tab(c, 2, true);
+    QCOMPARE(doc.toPlainText(), QString("  one\n  two\nthree"));
+    QVERIFY(c.position() < c.anchor());
+    QCOMPARE(c.selectedText(),
+             QString("  one") + QChar::ParagraphSeparator + "  two");
+    EditorIndentation::tab(c, 2, true, true);
+    QCOMPARE(doc.toPlainText(), QString("one\ntwo\nthree"));
+    doc.undo();
+    QCOMPARE(doc.toPlainText(), QString("  one\n  two\nthree"));
+    doc.undo();
+    QCOMPARE(doc.toPlainText(), QString("one\ntwo\nthree"));
+  }
+  void languageIndentationPolicy() {
+    QVERIFY(EditorIndentation::useSpaces("py", false));
+    QVERIFY(!EditorIndentation::useSpaces("make", true));
+    QVERIFY(EditorIndentation::useSpaces("cpp", true));
+    QVERIFY(!EditorIndentation::useSpaces("cpp", false));
+  }
+  void explicitTabsForNewBlocks() {
+    QTextDocument doc("if (ready) {}");
+    QTextCursor cursor(&doc);
+    cursor.setPosition(12);
+    EditorIndentation::insertNewline(cursor, {"cpp", 4, true, false, true});
+    QCOMPARE(doc.toPlainText(), QString("if (ready) {\n\t\n}"));
+    doc.undo();
+    QCOMPARE(doc.toPlainText(), QString("if (ready) {}"));
+  }
+  void tabsUseStopsAndLiteralTabs() {
+    QTextDocument doc("ab");
+    QTextCursor c(&doc);
+    c.movePosition(QTextCursor::End);
+    EditorIndentation::tab(c, 4, true);
+    QCOMPARE(doc.toPlainText(), QString("ab  "));
+    EditorIndentation::tab(c, 4, false);
+    QCOMPARE(doc.toPlainText(), QString("ab  \t"));
+    c.select(QTextCursor::Document);
+    EditorIndentation::tab(c, 4, false);
+    QVERIFY(doc.toPlainText().startsWith('\t'));
+  }
+  void sqlCommentsDoNotIndent() {
+    QTextDocument doc("SELECT 1; -- (");
+    QTextCursor c(&doc);
+    c.movePosition(QTextCursor::End);
+    EditorIndentation::insertNewline(c, {"sql", 4, true, true});
+    QCOMPARE(doc.toPlainText(), QString("SELECT 1; -- (\n"));
+  }
   void newline_data() {
     QTest::addColumn<QString>("before");
     QTest::addColumn<QString>("after");
