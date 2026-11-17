@@ -107,6 +107,7 @@ bool g_hugeVariables = false;
 QString g_stopReason = QStringLiteral("breakpoint");
 QStringList g_hangOn;
 QStringList g_crashOn;
+QStringList g_failOn;
 QString g_runInTerminalKind;
 
 void trace(const QJsonObject &message) {
@@ -239,6 +240,11 @@ void handleRequest(Channel *channel, const QJsonObject &request) {
     std::_Exit(7);
   }
   if (g_hangOn.contains(command)) {
+    return;
+  }
+  if (g_failOn.contains(command)) {
+    sendResponse(channel, seq, command, false, {},
+                 "The configured target could not be started");
     return;
   }
 
@@ -604,6 +610,8 @@ int main(int argc, char **argv) {
       g_hangOn.append(args[++i]);
     } else if (args[i] == "--crash-on" && i + 1 < args.size()) {
       g_crashOn.append(args[++i]);
+    } else if (args[i] == "--fail-on" && i + 1 < args.size()) {
+      g_failOn.append(args[++i]);
     } else if (args[i] == "--run-in-terminal" && i + 1 < args.size()) {
       g_runInTerminalKind = args[++i];
     } else if (args[i] == "--huge-variables") {

@@ -571,7 +571,7 @@ void MainWindow::ensureDebugPanel() {
             }
           });
   connect(debugPanel, &DebugPanel::startDebugRequested, this,
-          &MainWindow::startDebuggingForCurrentFile);
+          &MainWindow::on_debugButton_clicked);
   connect(debugPanel, &DebugPanel::showProgramIoRequested, this,
           [this]() { showDebugTerminal(m_activeDebugSessionId); });
   connect(debugPanel, &DebugPanel::restartDebugRequested, this, [this]() {
@@ -582,7 +582,7 @@ void MainWindow::ensureDebugPanel() {
         return;
       }
     }
-    startDebuggingForCurrentFile();
+    on_debugButton_clicked();
   });
   connect(debugPanel, &DebugPanel::stopDebugRequested, this, [this]() {
     QString sessionIdToStop = m_activeDebugSessionId;

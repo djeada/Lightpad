@@ -111,6 +111,16 @@ void MainWindow::openDialog(Dialog dialog) {
     if (findChildren<DebugConfigurationDialog *>().isEmpty()) {
       auto dialog = new DebugConfigurationDialog(this);
       dialog->setAttribute(Qt::WA_DeleteOnClose);
+      connect(dialog, &QDialog::accepted, this, [this, dialog]() {
+        const QString name = dialog->selectedConfigurationName();
+        if (name.isEmpty()) {
+          return;
+        }
+        setActiveDebugTarget(name);
+        SettingsManager::instance().setValue("lastDebugConfiguration", name);
+        SettingsManager::instance().saveSettings();
+        refreshDebugTargetButton();
+      });
       dialog->show();
     }
     break;
@@ -928,13 +938,25 @@ void MainWindow::rebuildRunTargetMenu() {
         m_runTargetMenu->addAction(tr("Run %1").arg(target.displayName()));
     connect(runNow, &QAction::triggered, this,
             [this, sourcePath]() { runPath(sourcePath); });
-    QAction *debugNow =
-        m_runTargetMenu->addAction(tr("Debug %1").arg(target.displayName()));
+    const QString debugTarget = activeDebugTarget();
+    const QString debugName =
+        debugTarget.startsWith(QLatin1String(kCompoundDebugTargetPrefix))
+            ? debugTarget.mid(int(strlen(kCompoundDebugTargetPrefix)))
+            : debugTarget;
+    QAction *debugNow = m_runTargetMenu->addAction(
+        debugName.isEmpty() ? tr("Quick Debug %1").arg(target.displayName())
+                            : tr("Debug using %1").arg(debugName));
     const QString debugPath = target.kind == RunTarget::Kind::PythonBackend
                                   ? target.filePath
                                   : sourcePath;
     connect(debugNow, &QAction::triggered, this,
-            [this, debugPath]() { startDebuggingForFile(debugPath); });
+            [this, debugPath, debugTarget]() {
+              if (debugTarget.isEmpty()) {
+                startDebuggingForFile(debugPath);
+              } else {
+                on_debugButton_clicked();
+              }
+            });
   }
 
   m_runTargetMenu->addSeparator();
@@ -1129,14 +1151,8 @@ void MainWindow::refreshDebugTargetButton() {
   ui->debugButton->setToolTip(tooltip);
   ui->debugButton->setStatusTip(tooltip);
   ui->debugButton->setAccessibleName(buttonText);
-
-  if (!selectedCompoundName.isEmpty()) {
-    setActiveDebugTarget(QString::fromLatin1(kCompoundDebugTargetPrefix) +
-                         selectedCompoundName);
-  } else if (!selectedName.isEmpty()) {
-    setActiveDebugTarget(selectedName);
-  } else if (!activeDebugTarget().isEmpty()) {
-    setActiveDebugTarget(QString());
+  if (ui->actionDebug_file_name) {
+    ui->actionDebug_file_name->setText(buttonText + QLatin1String("\tF5"));
   }
 }
 
@@ -1686,6 +1702,30 @@ bool MainWindow::prepareDebugConfigurationForStart(
         resolvedConfig->program = preparedProgram;
       }
     }
+  }
+
+  if (resolvedConfig->request == "launch" && resolvedConfig->type == "cppdbg") {
+    const QString workingDirectory =
+        resolvedConfig->cwd.isEmpty() ? m_projectRootPath : resolvedConfig->cwd;
+    const QFileInfo executable(
+        QDir(workingDirectory).absoluteFilePath(resolvedConfig->program));
+    if (resolvedConfig->program.isEmpty() || !executable.isFile()) {
+      if (errorMessage) {
+        *errorMessage = tr("Debug executable does not exist: %1\n\n"
+                           "Choose the compiled program in Debug "
+                           "Configurations. ${workspaceFolder} is %2.")
+                            .arg(resolvedConfig->program, m_projectRootPath);
+      }
+      return false;
+    }
+    if (!executable.isExecutable()) {
+      if (errorMessage) {
+        *errorMessage = tr("Debug program is not executable: %1")
+                            .arg(executable.absoluteFilePath());
+      }
+      return false;
+    }
+    resolvedConfig->program = executable.absoluteFilePath();
   }
 
   return true;

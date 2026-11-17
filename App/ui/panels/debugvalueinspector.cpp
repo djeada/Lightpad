@@ -25,6 +25,7 @@
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QTableWidget>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -67,14 +68,15 @@ DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
   QFont fixedFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
   fixedFont.setPointSize(qMax(10, font().pointSize()));
   auto *layout = new QVBoxLayout(this);
-  layout->setContentsMargins(8, 8, 8, 8);
-  layout->setSpacing(8);
+  layout->setContentsMargins(6, 0, 0, 0);
+  layout->setSpacing(4);
   auto *heading = new QHBoxLayout;
   m_title = new QLabel(tr("Value inspector"), this);
   m_title->setObjectName("debugValueTitle");
   m_title->setTextFormat(Qt::PlainText);
   m_title->setTextInteractionFlags(Qt::TextSelectableByMouse);
-  m_title->setWordWrap(true);
+  m_title->setWordWrap(false);
+  m_title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
   heading->addWidget(m_title, 1);
   m_liveUpdates = new QCheckBox(tr("Live"), this);
   m_liveUpdates->setObjectName("debugValueLiveUpdates");
@@ -92,7 +94,19 @@ DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
   connect(m_refresh, &QPushButton::clicked, this,
           [this]() { refreshValue(true); });
   heading->addWidget(m_refresh);
-  m_watch = new QPushButton(tr("Add to Watches"), this);
+  m_arrayOptions = new QToolButton(this);
+  m_arrayOptions->setObjectName("debugValueArrayOptions");
+  m_arrayOptions->setText(tr("Array"));
+  m_arrayOptions->setCheckable(true);
+  m_arrayOptions->setToolTip(tr("Show array and buffer settings"));
+  m_arrayOptions->hide();
+  connect(m_arrayOptions, &QToolButton::toggled, this, [this](bool show) {
+    m_arrayControls->setVisible(show && !m_arrayOptions->isHidden());
+  });
+  heading->addWidget(m_arrayOptions);
+  m_watch = new QPushButton(tr("Watch"), this);
+  m_watch->setObjectName("debugValueAddWatch");
+  m_watch->setToolTip(tr("Add this expression to Watches"));
   m_watch->setEnabled(false);
   connect(m_watch, &QPushButton::clicked, this,
           [this]() { emit addWatchRequested(m_value.evaluateName); });
@@ -105,10 +119,12 @@ DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
   heading->addWidget(copy);
   layout->addLayout(heading);
 
-  auto *formatRow = new QHBoxLayout;
-  formatRow->addWidget(new QLabel(tr("Display"), this));
   m_displayFormat = new QComboBox(this);
   m_displayFormat->setObjectName("debugValueDisplayFormat");
+  m_displayFormat->setAccessibleName(tr("Display format"));
+  m_displayFormat->setMinimumContentsLength(6);
+  m_displayFormat->setSizeAdjustPolicy(
+      QComboBox::AdjustToMinimumContentsLengthWithIcon);
   m_displayFormat->addItems({tr("Automatic"), tr("Decimal"), tr("Hexadecimal"),
                              tr("Binary"), tr("Character")});
   m_displayFormat->setToolTip(tr("Change how integer and character values are "
@@ -119,9 +135,6 @@ DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
               m_tabs->setCurrentIndex(1);
             refreshDisplay();
           });
-  formatRow->addWidget(m_displayFormat);
-  formatRow->addStretch();
-  layout->addLayout(formatRow);
 
   m_arrayControls = new QWidget(this);
   m_arrayControls->setObjectName("debugArrayControls");
@@ -206,14 +219,25 @@ DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
 
   m_filter = new QLineEdit(this);
   m_filter->setObjectName("debugValueFilter");
-  m_filter->setPlaceholderText(tr("Filter loaded names, values and types…"));
+  m_filter->setPlaceholderText(tr("Filter values…"));
+  m_filter->setToolTip(tr("Filter loaded names, values and types"));
+  m_filter->setMinimumWidth(80);
+  m_filter->setMaximumWidth(240);
   m_filter->setClearButtonEnabled(true);
   connect(m_filter, &QLineEdit::textChanged, this,
           &DebugValueInspector::filterTree);
-  layout->addWidget(m_filter);
 
   m_tabs = new QTabWidget(this);
   m_tabs->setObjectName("debugValueTabs");
+  m_tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
+  auto *viewTools = new QWidget(m_tabs);
+  viewTools->setObjectName("debugValueViewTools");
+  auto *viewLayout = new QHBoxLayout(viewTools);
+  viewLayout->setContentsMargins(4, 0, 0, 0);
+  viewLayout->setSpacing(4);
+  viewLayout->addWidget(m_displayFormat);
+  viewLayout->addWidget(m_filter, 1);
+  m_tabs->setCornerWidget(viewTools, Qt::TopRightCorner);
   m_tree = new QTreeWidget(this);
   m_tree->setObjectName("debugValueTree");
   m_tree->setHeaderLabels({tr("Name / index"), tr("Value"), tr("Type")});
@@ -306,7 +330,8 @@ DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
       this);
   m_status->setObjectName("debugValueStatus");
   m_status->setTextFormat(Qt::PlainText);
-  m_status->setWordWrap(true);
+  m_status->setWordWrap(false);
+  m_status->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
   layout->addWidget(m_status);
 }
 
@@ -376,6 +401,19 @@ void DebugValueInspector::setDapClient(DapClient *client) {
           [this](int threadId, const QList<DapStackFrame> &frames, int) {
             receiveFrames(threadId, frames);
           });
+  connect(
+      client, &DapClient::stackTraceFailed, this,
+      [this](int threadId, const QString &message) {
+        if (!m_waitingForFrame || threadId != m_threadId)
+          return;
+        m_waitingForFrame = false;
+        m_explicitRefresh = false;
+        m_refresh->setEnabled(m_client &&
+                              m_client->state() == DapClient::State::Stopped);
+        m_status->setText(
+            tr("Could not refresh: %1. Choose Refresh to retry.").arg(message));
+        m_status->setToolTip(m_status->text());
+      });
 }
 
 bool DebugValueInspector::supportsNativeBuffers() const {
@@ -541,6 +579,7 @@ void DebugValueInspector::clearValue() {
   m_readErrors = 0;
   m_stringView = false;
   m_arrayControls->hide();
+  m_arrayOptions->hide();
   m_tree->clear();
   m_table->clear();
   m_table->setRowCount(0);
@@ -568,6 +607,7 @@ void DebugValueInspector::clear() {
   m_liveUpdates->setEnabled(false);
   m_liveUpdates->setChecked(false);
   m_refresh->setEnabled(false);
+  m_arrayOptions->setChecked(false);
 }
 
 void DebugValueInspector::setValue(const DapVariable &value, int frameId,
@@ -613,6 +653,7 @@ void DebugValueInspector::renderValue(const DapVariable &value,
   m_title->setText(value.type.isEmpty()
                        ? value.name
                        : tr("%1  ·  %2").arg(value.name, value.type));
+  m_title->setToolTip(m_title->text());
   m_watch->setEnabled(!value.evaluateName.isEmpty());
   m_text->setPlainText(DebugValueFormatter::format(value.value));
   m_root = appendValue(nullptr, value);
@@ -627,7 +668,8 @@ void DebugValueInspector::renderValue(const DapVariable &value,
   const bool array =
       supportsNativeBuffers() && !value.evaluateName.isEmpty() &&
       DebugValueFormatter::canViewBuffer(value.type, value.memoryReference);
-  m_arrayControls->setVisible(array);
+  m_arrayOptions->setVisible(array);
+  m_arrayControls->setVisible(array && m_arrayOptions->isChecked());
   m_arrayControls->setEnabled(m_live);
   const int knownLength = DebugValueFormatter::arrayLength(value.type);
   if (!preserveView) {
@@ -696,7 +738,8 @@ void DebugValueInspector::renderValue(const DapVariable &value,
 }
 
 void DebugValueInspector::focusArrayControls() {
-  if (!m_arrayControls->isHidden()) {
+  if (!m_arrayOptions->isHidden()) {
+    m_arrayOptions->setChecked(true);
     m_arrayCount->setFocus();
     m_arrayCount->selectAll();
   }

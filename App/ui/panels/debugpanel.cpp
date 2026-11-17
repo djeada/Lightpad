@@ -792,7 +792,8 @@ void DebugPanel::setupUI() {
 
   setupConsole();
   m_consolePage =
-      createInspectorPage(m_consoleContent, m_consoleToolbar, m_consoleInput);
+      createInspectorPage(m_consoleContent, nullptr, nullptr, false);
+  m_consolePage->layout()->setContentsMargins(6, 4, 6, 4);
   QWidget *consolePage = m_consolePage;
 
   for (QTreeWidget *tree :
@@ -887,7 +888,7 @@ QToolButton *DebugPanel::createInspectorTabButton(const QString &label,
 
 QWidget *DebugPanel::createInspectorPage(QWidget *content,
                                          QWidget *headerActions,
-                                         QWidget *footer) {
+                                         QWidget *footer, bool scrollable) {
   QWidget *pageHost = new QWidget(this);
   pageHost->setObjectName("debugInspectorPage");
   pageHost->setAttribute(Qt::WA_StyledBackground, true);
@@ -917,8 +918,8 @@ QWidget *DebugPanel::createInspectorPage(QWidget *content,
     layout->addWidget(footer);
   }
 
-  hostLayout->addWidget(card);
-  return scrollableInspectorPage(pageHost, this);
+  hostLayout->addWidget(card, 1);
+  return scrollable ? scrollableInspectorPage(pageHost, this) : pageHost;
 }
 
 void DebugPanel::setCurrentInspectorTab(int index) {
@@ -1431,6 +1432,7 @@ void DebugPanel::setupConsole() {
           &DebugPanel::showConsoleContextMenu);
 
   m_consoleOutput->viewport()->installEventFilter(this);
+  m_consoleOutput->installEventFilter(this);
 
   m_consoleInput = new QLineEdit(this);
   m_consoleInput->setObjectName("debugConsoleInput");
@@ -1446,13 +1448,21 @@ void DebugPanel::setupConsole() {
   auto *splitter = new QSplitter(Qt::Horizontal, this);
   splitter->setObjectName("debugConsoleSplitter");
   splitter->setChildrenCollapsible(false);
-  splitter->addWidget(m_consoleOutput);
+  splitter->setHandleWidth(8);
+  splitter->setToolTip(
+      tr("Drag the divider to resize the console and value inspector"));
+  auto *outputPane = new QWidget(splitter);
+  outputPane->setObjectName("debugConsoleOutputPane");
+  auto *outputLayout = new QVBoxLayout(outputPane);
+  outputLayout->setContentsMargins(0, 0, 0, 0);
+  outputLayout->setSpacing(6);
+  splitter->addWidget(outputPane);
   m_consoleValueInspector = new DebugValueInspector(splitter);
   m_consoleValueInspector->setObjectName("debugConsoleValueInspector");
   splitter->addWidget(m_consoleValueInspector);
   splitter->setStretchFactor(0, 1);
-  splitter->setStretchFactor(1, 2);
-  splitter->setSizes({420, 620});
+  splitter->setStretchFactor(1, 3);
+  splitter->setSizes({360, 840});
   m_consoleContent = splitter;
   connect(m_consoleValueInspector, &DebugValueInspector::addWatchRequested,
           this, [](const QString &expression) {
@@ -1462,6 +1472,9 @@ void DebugPanel::setupConsole() {
           this, &DebugPanel::openValueInspector);
 
   setupConsoleToolbar();
+  outputLayout->addWidget(m_consoleToolbar);
+  outputLayout->addWidget(m_consoleOutput, 1);
+  outputLayout->addWidget(m_consoleInput);
   updateConsoleInputAffordances();
 }
 
@@ -1482,8 +1495,27 @@ void DebugPanel::setupConsoleToolbar() {
   m_consoleFindInput->setMaximumWidth(240);
   connect(m_consoleFindInput, &QLineEdit::returnPressed, this,
           [this]() { findInConsole(false); });
-  layout->addWidget(m_consoleFindInput);
-  layout->addStretch(1);
+  layout->addWidget(m_consoleFindInput, 1);
+
+  m_consoleFollowAction = new QAction(tr("Follow"), this);
+  m_consoleFollowAction->setObjectName("debugConsoleFollowAction");
+  m_consoleFollowAction->setCheckable(true);
+  m_consoleFollowAction->setChecked(true);
+  m_consoleFollowAction->setToolTip(
+      tr("Follow new output; scroll up to read history"));
+  connect(m_consoleFollowAction, &QAction::toggled, this, [this](bool follow) {
+    if (follow)
+      followConsoleOutput();
+  });
+  auto *scrollBar = m_consoleOutput->verticalScrollBar();
+  connect(scrollBar, &QScrollBar::actionTriggered, this, [this, scrollBar]() {
+    m_consoleFollowAction->setChecked(scrollBar->sliderPosition() >=
+                                      scrollBar->maximum() - 4);
+  });
+  connect(
+      scrollBar, &QScrollBar::sliderMoved, this, [this, scrollBar](int value) {
+        m_consoleFollowAction->setChecked(value >= scrollBar->maximum() - 4);
+      });
 
   m_consoleWrapAction = new QAction(tr("Wrap"), this);
   m_consoleWrapAction->setCheckable(true);
@@ -1495,7 +1527,8 @@ void DebugPanel::setupConsoleToolbar() {
   });
   m_consoleWrapAction->setChecked(true);
 
-  m_consoleInspectorAction = new QAction(tr("Inspector"), this);
+  m_consoleInspectorAction = new QAction(tr("Value"), this);
+  m_consoleInspectorAction->setObjectName("debugConsoleInspectorAction");
   m_consoleInspectorAction->setCheckable(true);
   m_consoleInspectorAction->setChecked(true);
   m_consoleInspectorAction->setToolTip(
@@ -1517,8 +1550,7 @@ void DebugPanel::setupConsoleToolbar() {
   connect(m_consoleDetachAction, &QAction::triggered, this,
           &DebugPanel::toggleConsoleDetached);
 
-  for (QAction *action : {m_consoleInspectorAction, m_consoleWrapAction,
-                          m_consoleDetachAction, m_consoleClearAction}) {
+  for (QAction *action : {m_consoleFollowAction, m_consoleInspectorAction}) {
     QToolButton *button = new QToolButton(m_consoleToolbar);
     button->setDefaultAction(action);
     button->setToolButtonStyle(Qt::ToolButtonTextOnly);
@@ -1527,6 +1559,17 @@ void DebugPanel::setupConsoleToolbar() {
     button->setObjectName("debugConsoleToolButton");
     layout->addWidget(button);
   }
+  auto *more = new QToolButton(m_consoleToolbar);
+  more->setObjectName("debugConsoleMore");
+  more->setText(tr("More"));
+  more->setToolTip(tr("Console wrapping, detach and clear"));
+  more->setPopupMode(QToolButton::InstantPopup);
+  auto *menu = new QMenu(more);
+  menu->addAction(m_consoleWrapAction);
+  menu->addAction(m_consoleDetachAction);
+  menu->addAction(m_consoleClearAction);
+  more->setMenu(menu);
+  layout->addWidget(more);
 }
 
 void DebugPanel::toggleConsoleDetached() {
@@ -3754,8 +3797,8 @@ void DebugPanel::updateToolbarState() {
     m_continueAction->setStatusTip(tr("Continue execution (F5)"));
   } else {
     m_continueAction->setText(tr("Start"));
-    m_continueAction->setToolTip(tr("Start debugging current file (F5)"));
-    m_continueAction->setStatusTip(tr("Start debugging current file (F5)"));
+    m_continueAction->setToolTip(tr("Start debugging (F5)"));
+    m_continueAction->setStatusTip(tr("Start debugging (F5)"));
   }
 
   if (m_debugStatusLabel) {
@@ -4382,8 +4425,6 @@ void DebugPanel::appendConsoleLine(const QString &text, const QColor &color,
   }
 
   QScrollBar *scrollBar = m_consoleOutput->verticalScrollBar();
-  const bool wasAtBottom =
-      !scrollBar || scrollBar->value() >= scrollBar->maximum() - 4;
   const int previousScroll = scrollBar ? scrollBar->value() : 0;
 
   QTextCursor cursor(m_consoleOutput->document());
@@ -4398,12 +4439,26 @@ void DebugPanel::appendConsoleLine(const QString &text, const QColor &color,
     cursor.insertBlock();
   }
 
-  if (wasAtBottom) {
-    m_consoleOutput->setTextCursor(cursor);
-    m_consoleOutput->ensureCursorVisible();
+  if (m_consoleFollowAction->isChecked()) {
+    followConsoleOutput();
   } else if (scrollBar) {
     scrollBar->setValue(previousScroll);
   }
+}
+
+void DebugPanel::followConsoleOutput() {
+  if (!m_consoleFollowAction || !m_consoleFollowAction->isChecked() ||
+      m_consoleFollowQueued)
+    return;
+  m_consoleFollowQueued = true;
+  QTimer::singleShot(0, this, [this]() {
+    m_consoleFollowQueued = false;
+    if (m_consoleFollowAction->isChecked()) {
+      m_consoleOutput->moveCursor(QTextCursor::End);
+      m_consoleOutput->verticalScrollBar()->setValue(
+          m_consoleOutput->verticalScrollBar()->maximum());
+    }
+  });
 }
 
 int DebugPanel::findPendingConsoleEvaluationIndex(int requestSeq) const {
@@ -4548,6 +4603,9 @@ bool DebugPanel::paintTreeEmptyState(QTreeWidget *tree) {
 }
 
 bool DebugPanel::eventFilter(QObject *watched, QEvent *event) {
+  if (watched == m_consoleOutput &&
+      (event->type() == QEvent::Show || event->type() == QEvent::Resize))
+    followConsoleOutput();
   if (watched == m_debugStatusLabel && event->type() == QEvent::Resize) {
     applyDebugStatusText();
   }

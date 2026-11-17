@@ -201,25 +201,23 @@ void MainWindow::runTestsForCurrentContext() {
 void MainWindow::on_runButton_clicked() { runCurrentScript(); }
 
 void MainWindow::on_debugButton_clicked() {
-  const QString compoundName = selectedCompoundDebugConfigurationName();
-  if (!compoundName.isEmpty()) {
-    startCompoundDebugConfigurationByName(compoundName);
-    return;
-  }
-
-  const QString configurationName = selectedDebugConfigurationName();
-  if (configurationName.isEmpty()) {
+  const QString target = activeDebugTarget().trimmed();
+  if (target.isEmpty()) {
     startDebuggingForCurrentFile();
     return;
   }
-
-  startDebugConfigurationByName(configurationName);
+  if (target.startsWith(QLatin1String(kCompoundDebugTargetPrefix))) {
+    startCompoundDebugConfigurationByName(
+        target.mid(int(strlen(kCompoundDebugTargetPrefix))));
+    return;
+  }
+  startDebugConfigurationByName(target);
 }
 
 void MainWindow::on_actionRun_file_name_triggered() { runCurrentScript(); }
 
 void MainWindow::on_actionDebug_file_name_triggered() {
-  startDebuggingForCurrentFile();
+  on_debugButton_clicked();
 }
 
 void MainWindow::on_actionStart_Debug_Configuration_triggered() {

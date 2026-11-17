@@ -873,6 +873,18 @@ if(Python3_Interpreter_FOUND AND NOT WIN32)
         LABELS "integration"
         TIMEOUT 60
     )
+    add_test(
+        NAME DebugConfigurationRestartSmoke
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/scripts/debug_configuration_restart_smoke_test.py
+            $<TARGET_FILE:Lightpad>
+    )
+    set_tests_properties(DebugConfigurationRestartSmoke PROPERTIES
+        SKIP_RETURN_CODE 2
+        LABELS "dap;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 180
+    )
 endif()
 
 if(Python3_Interpreter_FOUND)

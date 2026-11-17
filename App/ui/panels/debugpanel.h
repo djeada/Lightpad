@@ -136,7 +136,8 @@ private:
   QToolButton *createInspectorTabButton(const QString &label, int index);
   QWidget *createInspectorPage(QWidget *content,
                                QWidget *headerActions = nullptr,
-                               QWidget *footer = nullptr);
+                               QWidget *footer = nullptr,
+                               bool scrollable = true);
   void setCurrentInspectorTab(int index);
   void setInspectorTabLabel(int index, const QString &label);
 
@@ -151,6 +152,7 @@ private:
   void refreshBreakpointList();
   void appendConsoleLine(const QString &text, const QColor &color,
                          bool bold = false);
+  void followConsoleOutput();
   int findPendingConsoleEvaluationIndex(int requestSeq) const;
   void dispatchPendingConsoleEvaluation(int pendingIndex);
   void fitVariablesNameColumn();
@@ -295,6 +297,8 @@ private:
   QAction *m_consoleDetachAction = nullptr;
   QAction *m_consoleClearAction = nullptr;
   QAction *m_consoleWrapAction = nullptr;
+  QAction *m_consoleFollowAction = nullptr;
+  bool m_consoleFollowQueued = false;
   QLineEdit *m_consoleFindInput = nullptr;
 
   void clearInlineValues();
