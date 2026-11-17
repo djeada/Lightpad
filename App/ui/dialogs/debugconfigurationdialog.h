@@ -36,6 +36,8 @@ public:
 
   void applyTheme(const Theme &theme) override;
 
+  QString selectedConfigurationName() const { return m_currentConfigName; }
+
 public slots:
   void reject() override;
 

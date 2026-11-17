@@ -5,7 +5,9 @@
 #include <QHostAddress>
 #include <QJsonDocument>
 #include <QProcess>
+#include <QScrollBar>
 #include <QSignalSpy>
+#include <QSplitter>
 #include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QtTest/QtTest>
@@ -169,6 +171,7 @@ private slots:
   void testCommandLineArgumentsRoundTrip();
   void testConfigurationRenameRefusesExistingName();
   void testDebugConfigurationDialogValidationAndCancel();
+  void testDebugConfigurationDialogSavesSelectedArguments();
   void testDebugConfigurationDialogDebouncesStatusProbe();
   void testNestedValueFormatting();
   void testNativeScalarFormats();
@@ -203,10 +206,18 @@ private slots:
   void testGdbLaunchEnvironmentPreservesGraphicsContext();
   void testGdbDebuggeeReadsStdinFromProvidedTerminal();
   void testGdbDebuggeeLaunchesWithoutTerminal();
+  void testFailedLaunchRecoversControls_data();
+  void testFailedLaunchRecoversControls();
+  void testGdbConfiguredLaunchSupportsStepping();
   void testProgramIoButtonFollowsSelectedClient();
   void testDebugToolbarCollapsesToIconsWhenNarrow();
   void testLargeInspectionFontSurvivesThemesAndDetaching();
   void testConsoleResultOpensStructuredInspector();
+  void testConsoleLayoutKeepsInspectorUsable_data();
+  void testConsoleLayoutKeepsInspectorUsable();
+  void testConsoleFollowsNewOutput();
+  void testInspectorRefreshCanRetryAfterStackFailure_data();
+  void testInspectorRefreshCanRetryAfterStackFailure();
   void testPartialThreadExecution();
   void testSelectedThreadExecutionArguments();
   void testPythonThreadSelection();
@@ -2541,6 +2552,49 @@ void TestDap::testDebugConfigurationDialogValidationAndCancel() {
   manager.replaceConfigurations(original);
 }
 
+void TestDap::testDebugConfigurationDialogSavesSelectedArguments() {
+  DebugConfigurationManager &manager = DebugConfigurationManager::instance();
+  const QList<DebugConfiguration> original = manager.allConfigurations();
+  const QString originalWorkspace = manager.workspaceFolder();
+  auto restore = qScopeGuard([&]() {
+    manager.replaceConfigurations(original);
+    manager.setWorkspaceFolder(originalWorkspace);
+  });
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  manager.setWorkspaceFolder(dir.path());
+
+  DebugConfiguration a;
+  a.name = "A: Other Program";
+  a.type = "cppdbg";
+  a.program = "/other";
+  DebugConfiguration b = a;
+  b.name = "B: GDB Launch";
+  b.adapterId = "cppdbg-gdb";
+  b.request = "launch";
+  b.program = "${workspaceFolder}/vulnerable";
+  manager.replaceConfigurations({a, b});
+
+  DebugConfigurationDialog dialog;
+  dialog.m_configList->setCurrentRow(1);
+  dialog.m_argsEdit->setText("AAAA \"two words\"");
+  QSignalSpy accepted(&dialog, &QDialog::accepted);
+  dialog.onSave();
+  QCOMPARE(accepted.count(), 1);
+  QCOMPARE(dialog.selectedConfigurationName(), b.name);
+
+  manager.replaceConfigurations({});
+  QVERIFY(manager.loadFromLightpadDir());
+  const DebugConfiguration saved = manager.resolveVariables(
+      manager.configuration(dialog.selectedConfigurationName()));
+  QCOMPARE(saved.args, QStringList({"AAAA", "two words"}));
+  QCOMPARE(saved.program, dir.filePath("vulnerable"));
+  const auto adapter = DebugAdapterRegistry::instance().adapter("cppdbg-gdb");
+  QVERIFY(adapter);
+  QCOMPARE(adapter->launchArguments(saved)["args"].toArray(),
+           QJsonArray({"AAAA", "two words"}));
+}
+
 void TestDap::testDebugConfigurationDialogDebouncesStatusProbe() {
   DebugConfigurationManager &manager = DebugConfigurationManager::instance();
   const QList<DebugConfiguration> original = manager.allConfigurations();
@@ -2868,10 +2922,10 @@ void TestDap::testInspectorMatrixAndRaggedRows() {
   filter->clear();
   QVERIFY(!table->isRowHidden(0));
   QSignalSpy watchSpy(&inspector, &DebugValueInspector::addWatchRequested);
-  for (auto *button : inspector.findChildren<QPushButton *>()) {
-    if (button->text() == "Add to Watches")
-      button->click();
-  }
+  auto *addWatchButton =
+      inspector.findChild<QPushButton *>("debugValueAddWatch");
+  QVERIFY(addWatchButton);
+  addWatchButton->click();
   QCOMPARE(watchSpy.count(), 1);
   QCOMPARE(watchSpy.first().first().toString(), QString("matrix"));
   client.stop(false);
@@ -3480,9 +3534,10 @@ void TestDap::testNativeBufferPagingAndSnapshot() {
   QCOMPARE(root->childCount(), 240);
 
   QSignalSpy watch(&inspector, &DebugValueInspector::addWatchRequested);
-  for (auto *button : inspector.findChildren<QPushButton *>())
-    if (button->text() == "Add to Watches")
-      button->click();
+  auto *addWatchButton =
+      inspector.findChild<QPushButton *>("debugValueAddWatch");
+  QVERIFY(addWatchButton);
+  addWatchButton->click();
   QCOMPARE(watch.count(), 1);
   QVERIFY(evaluateDebugObject(run.client, run.frame.id,
                               watch.first().first().toString(), &value));
@@ -4609,6 +4664,143 @@ void TestDap::testGdbDebuggeeLaunchesWithoutTerminal() {
 }
 #endif
 
+void TestDap::testFailedLaunchRecoversControls_data() {
+  QTest::addColumn<QString>("command");
+  QTest::newRow("launch") << QString("launch");
+  QTest::newRow("attach") << QString("attach");
+}
+
+void TestDap::testFailedLaunchRecoversControls() {
+  QFETCH(QString, command);
+  DapClient client;
+  DebugPanel panel;
+  panel.setDapClient(&client);
+  QSignalSpy errors(&client, &DapClient::error);
+  QVERIFY(client.start(fakeAdapterPath(), {"--fail-on", command}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  if (command == "launch") {
+    client.launch(QJsonObject{{"program", "/missing-program"}});
+  } else {
+    client.attach(QJsonObject{{"processId", 123}});
+  }
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Error, 5000);
+  QVERIFY(!errors.isEmpty());
+  QVERIFY(errors.last().first().toString().contains(command + " failed"));
+  for (QAction *action : panel.transportActions()) {
+    QCOMPARE(action->isEnabled(),
+             action->shortcut() == QKeySequence(Qt::Key_F5));
+  }
+  client.stop(false);
+}
+
+void TestDap::testGdbConfiguredLaunchSupportsStepping() {
+  const auto adapter = DebugAdapterRegistry::instance().adapter("cppdbg-gdb");
+  const QString compiler = QStandardPaths::findExecutable("cc");
+  if (!adapter || !adapter->isAvailable() || compiler.isEmpty())
+    QSKIP("needs a C compiler and usable GDB DAP");
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString source = dir.filePath("stepping.c");
+  const QString binary = dir.filePath("stepping");
+  QFile file(source);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("#include <stdio.h>\n"
+             "int increment(int input) {\n"
+             "  volatile int result = input + 1;\n"
+             "  return result;\n"
+             "}\n"
+             "int main(int argc, char **argv) {\n"
+             "  volatile int value = argc;\n"
+             "  int result = 0;\n"
+             "  result = increment(value);\n"
+             "  printf(\"%s:%d\\n\", argv[1], result);\n"
+             "  return 0;\n"
+             "}\n");
+  file.close();
+  QProcess build;
+  build.start(compiler, {"-g", "-O0", source, "-o", binary});
+  QVERIFY(build.waitForFinished(30000));
+  QCOMPARE(build.exitCode(), 0);
+
+  auto &manager = DebugConfigurationManager::instance();
+  const auto original = manager.allConfigurations();
+  const QString originalWorkspace = manager.workspaceFolder();
+  auto restore = qScopeGuard([&]() {
+    manager.replaceConfigurations(original);
+    manager.setWorkspaceFolder(originalWorkspace);
+    cleanupBreakpoints();
+  });
+  DebugConfiguration config;
+  config.name = "configured stepping";
+  config.type = "cppdbg";
+  config.adapterId = "cppdbg-gdb";
+  config.request = "launch";
+  config.program = "${workspaceFolder}/stepping";
+  config.cwd = "${workspaceFolder}";
+  config.args = {"AAAA"};
+  manager.setWorkspaceFolder(dir.path());
+  manager.replaceConfigurations({config});
+  QVERIFY(manager.saveToLightpadDir());
+  manager.replaceConfigurations({});
+  QVERIFY(manager.loadFromLightpadDir());
+  config = manager.resolveVariables(manager.configuration(config.name));
+  cleanupBreakpoints();
+  BreakpointManager::instance().toggleBreakpoint(source, 8);
+
+  DebugSession session("configured-stepping-test");
+  DebugPanel panel;
+  panel.setDapClient(session.client());
+  QSignalSpy stopped(&session, &DebugSession::stopped);
+  QSignalSpy terminated(&session, &DebugSession::terminated);
+  QString output;
+  connect(&session, &DebugSession::outputReceived, &panel,
+          [&](const DapOutputEvent &event) { output += event.output; });
+  const auto actionForKey = [&](const QKeySequence &key) -> QAction * {
+    for (QAction *action : panel.transportActions())
+      if (action->shortcut() == key)
+        return action;
+    return nullptr;
+  };
+  QAction *over = actionForKey(QKeySequence(Qt::Key_F10));
+  QAction *into = actionForKey(QKeySequence(Qt::Key_F11));
+  QAction *out = actionForKey(QKeySequence(Qt::SHIFT | Qt::Key_F11));
+  QAction *resume = actionForKey(QKeySequence(Qt::Key_F5));
+  QVERIFY(over && into && out && resume);
+  QVERIFY(session.start(config, adapter));
+  QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 1, 10000);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      over->isEnabled() && into->isEnabled() && out->isEnabled(), 10000);
+  over->trigger();
+  QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 2, 10000);
+  QTRY_VERIFY_WITH_TIMEOUT(into->isEnabled(), 10000);
+  auto *input = panel.findChild<QLineEdit *>("debugConsoleInput");
+  auto *inspector =
+      panel.findChild<DebugValueInspector *>("debugConsoleValueInspector");
+  QVERIFY(input && inspector);
+  auto *valueTree = inspector->findChild<QTreeWidget *>("debugValueTree");
+  input->setText("result");
+  input->returnPressed();
+  QTRY_VERIFY_WITH_TIMEOUT(valueTree->topLevelItemCount() == 1 &&
+                               valueTree->topLevelItem(0)->text(1) == "0",
+                           10000);
+  into->trigger();
+  QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 3, 10000);
+  QTRY_VERIFY_WITH_TIMEOUT(out->isEnabled(), 10000);
+  out->trigger();
+  QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 4, 10000);
+  QTRY_VERIFY_WITH_TIMEOUT(over->isEnabled(), 10000);
+  // Finish returns before the caller stores the function's result.
+  over->trigger();
+  QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 5, 10000);
+  QTRY_VERIFY_WITH_TIMEOUT(valueTree->topLevelItemCount() == 1 &&
+                               valueTree->topLevelItem(0)->text(1) == "3",
+                           10000);
+  QTRY_VERIFY_WITH_TIMEOUT(resume->isEnabled(), 10000);
+  resume->trigger();
+  QTRY_COMPARE_WITH_TIMEOUT(terminated.count(), 1, 10000);
+  QVERIFY2(output.contains("AAAA:3"), qPrintable(output));
+}
+
 void TestDap::testProgramIoButtonFollowsSelectedClient() {
   DebugPanel panel;
   auto *button = panel.findChild<QToolButton *>("debugProgramIoButton");
@@ -4688,6 +4880,125 @@ void TestDap::testConsoleResultOpensStructuredInspector() {
               ->findChild<QLabel *>("debugValueStatus")
               ->text()
               .contains("Snapshot"));
+  client.stop(false);
+}
+
+void TestDap::testConsoleLayoutKeepsInspectorUsable_data() {
+  QTest::addColumn<QSize>("panelSize");
+  QTest::addColumn<int>("fontSize");
+  QTest::newRow("wide") << QSize(1900, 600) << 18;
+  QTest::newRow("compact") << QSize(1100, 420) << 14;
+  QTest::newRow("large-font") << QSize(1900, 600) << 24;
+}
+
+void TestDap::testConsoleLayoutKeepsInspectorUsable() {
+  QFETCH(QSize, panelSize);
+  QFETCH(int, fontSize);
+  DebugPanel panel;
+  panel.setContentFont(QFont("monospace", fontSize));
+  panel.resize(panelSize);
+  for (auto *button : panel.findChildren<QToolButton *>("debugInspectorTab"))
+    if (button->text().startsWith("Console"))
+      button->click();
+  auto *showValue = panel.findChild<QAction *>("debugConsoleInspectorAction");
+  QVERIFY(showValue);
+  showValue->setChecked(true);
+  auto *inspector =
+      panel.findChild<DebugValueInspector *>("debugConsoleValueInspector");
+  DapVariable value;
+  value.name = "account";
+  value.type = "Account";
+  value.variablesReference = 1000;
+  inspector->setValue(value);
+  panel.show();
+  QTest::qWait(50);
+  auto *tree = inspector->findChild<QTreeWidget *>("debugValueTree");
+  auto *output = panel.findChild<QPlainTextEdit *>("debugConsoleOutput");
+  auto *splitter = panel.findChild<QSplitter *>("debugConsoleSplitter");
+  QVERIFY(tree->isVisible());
+  QVERIFY2(tree->viewport()->height() >= panelSize.height() / 3,
+           qPrintable(QString("Tree viewport is only %1 px in a %2 px panel")
+                          .arg(tree->viewport()->height())
+                          .arg(panelSize.height())));
+  QVERIFY(inspector->mapTo(&panel, QPoint()).y() <
+          output->mapTo(&panel, QPoint()).y());
+  auto *input = panel.findChild<QLineEdit *>("debugConsoleInput");
+  QVERIFY(input->mapTo(&panel, QPoint(0, input->height())).y() <=
+          panel.height());
+  QVERIFY(splitter->handleWidth() >= 6);
+  if (!qEnvironmentVariableIsEmpty("LIGHTPAD_CONSOLE_SCREENSHOT"))
+    panel.grab().save(qEnvironmentVariable("LIGHTPAD_CONSOLE_SCREENSHOT") +
+                      "-" + QTest::currentDataTag() + ".png");
+}
+
+void TestDap::testConsoleFollowsNewOutput() {
+  DapClient client;
+  DebugPanel panel;
+  panel.setDapClient(&client);
+  panel.resize(1100, 420);
+  for (auto *button : panel.findChildren<QToolButton *>("debugInspectorTab"))
+    if (button->text().startsWith("Console"))
+      button->click();
+  panel.show();
+  auto *output = panel.findChild<QPlainTextEdit *>("debugConsoleOutput");
+  auto *follow = panel.findChild<QAction *>("debugConsoleFollowAction");
+  auto *scroll = output->verticalScrollBar();
+  QVERIFY(follow && follow->isChecked());
+  for (int i = 0; i < 120; ++i)
+    client.feedAdapterData(frameMessage(outputEventMessage(
+        i + 1, QString("line %1: ").arg(i) + QString(200, 'x') + '\n')));
+  QTRY_VERIFY(scroll->maximum() > 0);
+  QTRY_COMPARE(scroll->value(), scroll->maximum());
+  scroll->triggerAction(QAbstractSlider::SliderToMinimum);
+  QVERIFY(!follow->isChecked());
+  client.feedAdapterData(
+      frameMessage(outputEventMessage(200, "new output while reading\n")));
+  QCoreApplication::processEvents();
+  QVERIFY(output->toPlainText().contains("new output while reading"));
+  QCOMPARE(scroll->value(), 0);
+  follow->setChecked(true);
+  QTRY_COMPARE(scroll->value(), scroll->maximum());
+  panel.hide();
+  client.feedAdapterData(
+      frameMessage(outputEventMessage(201, "output while hidden\n")));
+  panel.resize(800, 420);
+  panel.show();
+  QTRY_COMPARE(scroll->value(), scroll->maximum());
+  QVERIFY(output->toPlainText().contains("output while hidden"));
+}
+
+void TestDap::testInspectorRefreshCanRetryAfterStackFailure_data() {
+  QTest::addColumn<QString>("option");
+  QTest::newRow("rejected") << QString("--fail-on");
+  QTest::newRow("timed-out") << QString("--hang-on");
+}
+
+void TestDap::testInspectorRefreshCanRetryAfterStackFailure() {
+  QFETCH(QString, option);
+  DapClient client;
+  QVERIFY(client.start(fakeAdapterPath(),
+                       {"--stop-on-launch", option, "stackTrace"}));
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Ready, 5000);
+  client.launch(QJsonObject{{"program", "/tmp/app"}});
+  QTRY_COMPARE_WITH_TIMEOUT(client.state(), DapClient::State::Stopped, 5000);
+  client.setRequestTimeoutMs(100);
+  DebugValueInspector inspector;
+  inspector.setDapClient(&client);
+  DapVariable value;
+  value.name = value.evaluateName = "value";
+  value.value = "7";
+  value.type = "int";
+  QSignalSpy failed(&client, &DapClient::stackTraceFailed);
+  inspector.setValue(value, 100);
+  auto *refresh = inspector.findChild<QPushButton *>("debugValueRefresh");
+  auto *status = inspector.findChild<QLabel *>("debugValueStatus");
+  refresh->click();
+  QTRY_COMPARE_WITH_TIMEOUT(failed.count(), 1, 5000);
+  QVERIFY(status->text().contains("Refresh to retry"));
+  QVERIFY(refresh->isEnabled());
+  refresh->click();
+  QTRY_COMPARE_WITH_TIMEOUT(failed.count(), 2, 5000);
+  QVERIFY(status->text().contains("Refresh to retry"));
   client.stop(false);
 }
 

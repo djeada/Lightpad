@@ -3476,12 +3476,6 @@ void MainWindow::updateRunAndDebugActionLabels(const QString &fileName) {
     ui->actionRun_file_name->setText(label.isEmpty() ? tr("Run Current File")
                                                      : tr("Run %1").arg(label));
   }
-  if (ui->actionDebug_file_name) {
-
-    const QString debugLabel =
-        label.isEmpty() ? tr("Debug Current File") : tr("Debug %1").arg(label);
-    ui->actionDebug_file_name->setText(debugLabel + QLatin1String("\tF5"));
-  }
 }
 
 void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,

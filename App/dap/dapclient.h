@@ -592,6 +592,7 @@ signals:
   void threadsReceived(const QList<DapThread> &threads);
   void stackTraceReceived(int threadId, const QList<DapStackFrame> &frames,
                           int totalFrames);
+  void stackTraceFailed(int threadId, const QString &message);
   void scopesReceived(int frameId, const QList<DapScope> &scopes);
   void variablesReceived(int variablesReference,
                          const QList<DapVariable> &variables);

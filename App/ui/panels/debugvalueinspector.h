@@ -18,6 +18,7 @@ class QTableWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
 class QSpinBox;
+class QToolButton;
 
 class DebugValueInspector : public QWidget {
   Q_OBJECT
@@ -135,6 +136,7 @@ private:
   QSpinBox *m_arrayColumns = nullptr;
   QComboBox *m_elementType = nullptr;
   QComboBox *m_displayFormat = nullptr;
+  QToolButton *m_arrayOptions = nullptr;
   QLabel *m_title = nullptr;
   QLabel *m_status = nullptr;
   QLineEdit *m_filter = nullptr;

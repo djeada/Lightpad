@@ -1665,6 +1665,16 @@ void DapClient::handleResponse(int requestSeq, const QString &command,
       return;
     }
 
+    if (command == "launch" || command == "attach") {
+      setState(State::Error);
+    }
+    if (command == "stackTrace") {
+      const int threadId = pendingCommand.startsWith("stackTrace:")
+                               ? pendingCommand.mid(11).toInt()
+                               : m_currentThreadId;
+      emit stackTraceFailed(threadId, message);
+    }
+
     LOG_ERROR(QString("DAP error for %1: %2").arg(command).arg(message));
 
     if (command == "evaluate") {
