@@ -8,6 +8,7 @@
 #include "../core/textarea.h"
 #include "../database/databasemanager.h"
 #include "../theme/themeengine.h"
+#include "deferredrestyle.h"
 #include "dockutils.h"
 #include "panels/databasepanel.h"
 #include "panels/dbglyphs.h"
@@ -256,9 +257,14 @@ void MainWindow::ensureDatabasePanel() {
   }
   databasePanel = new DatabasePanel(&DatabaseManager::instance(), this);
   databasePanel->setObjectName("databasePanelWidget");
-  databasePanel->applyTheme(getTheme());
+  databasePanel->setWorkspaceFolder(m_projectRootPath);
   databasePanel->restoreState();
-  databasePanel->setContentFont(settings.mainFont);
+  DeferredRestyle::apply(
+      databasePanel, QStringLiteral("theme"),
+      [w = databasePanel, theme = getTheme(), font = settings.mainFont] {
+        w->applyTheme(theme);
+        w->setContentFont(font);
+      });
   connect(databasePanel, &DatabasePanel::openInEditorRequested, this,
           &MainWindow::openSqlInEditor);
   connect(

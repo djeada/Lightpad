@@ -65,7 +65,10 @@ signals:
   void restartDebugRequested();
   void showProgramIoRequested();
 
+  // Values of the current frame's locals for the editor; `functionName`
+  // limits them to that function's lines. Empty values clear them.
   void inlineValuesChanged(const QString &filePath, int line,
+                           const QString &functionName,
                            const QHash<QString, QString> &values);
 
 public slots:
@@ -286,6 +289,8 @@ private:
   QHash<QString, QString> m_previousVariableValues;
 
   QString m_debugStatusText;
+  // Why the program stopped, logged with the location once frames arrive.
+  QString m_pendingStopMessage;
 
   QStringList m_consoleHistory;
   int m_consoleHistoryIndex = 0;

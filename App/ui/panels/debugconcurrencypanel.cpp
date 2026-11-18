@@ -87,7 +87,7 @@ DebugConcurrencyPanel::DebugConcurrencyPanel(QWidget *parent)
   splitter->addWidget(m_sessions);
   splitter->addWidget(m_output);
   splitter->setSizes({500, 500});
-  tabs->addTab(splitter, tr("Processes & threads"));
+  tabs->addTab(splitter, tr("Processes && threads"));
   connect(m_sessions, &QTreeWidget::currentItemChanged, this,
           &DebugConcurrencyPanel::showSelectedOutput);
   connect(m_sessions, &QTreeWidget::itemActivated, this,

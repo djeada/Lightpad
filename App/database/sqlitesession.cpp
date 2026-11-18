@@ -34,7 +34,10 @@ public:
 public slots:
   void openDatabase(const QString &path, bool readOnly) {
     closeDatabase();
-    if (!QFileInfo::exists(path)) {
+    const bool inMemory = path == QLatin1String(":memory:");
+    if (inMemory) {
+      readOnly = false;
+    } else if (!QFileInfo::exists(path)) {
       emit openFailed(
           QStringLiteral("The database file does not exist: %1").arg(path));
       return;

@@ -1,5 +1,6 @@
 #include "database/databasemanager.h"
 #include "settings/theme.h"
+#include "ui/dialogs/connectiondialog.h"
 #include "ui/panels/databasepanel.h"
 #include "ui/panels/dbinsightsview.h"
 #include "ui/panels/dbresultview.h"
@@ -7,16 +8,20 @@
 
 #include "ui/tabnavigation.h"
 #include <QClipboard>
+#include <QComboBox>
 #include <QCompleter>
 #include <QDialog>
 #include <QFile>
 #include <QHeaderView>
+#include <QLabel>
 #include <QMenu>
+#include <QPushButton>
 #include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QTextBlock>
 #include <QTextLayout>
 #include <QTimer>
+#include <QTreeWidget>
 #include <QtTest/QtTest>
 
 namespace {
@@ -97,7 +102,244 @@ private slots:
   void panelReadOnlyConnectionRefusesWrites();
   void largeFontReachesSqlTreeResultsAndDialogs();
   void storageAndContextActionsPreserveResults();
+
+  void connectionDialogListsProjectContainersAndTemplates();
+  void connectionDialogFillsFormFromUrl();
+  void connectionDialogTemplatesShapeTheForm();
+  void connectionDialogEditsWithoutChooser();
+  void panelCreatesScratchConnectionFromTemplate();
+  void panelReadsPasswordFromEnvironment();
 };
+
+void TestDatabasePanel::connectionDialogListsProjectContainersAndTemplates() {
+  QTemporaryDir dir;
+  QFile env(dir.filePath(".env"));
+  QVERIFY(env.open(QIODevice::WriteOnly));
+  env.write("DATABASE_URL=postgresql://app:pw@db.local:5432/shop\n");
+  env.close();
+
+  ConnectionDialog dlg;
+  dlg.applyTheme(testTheme());
+  dlg.setWorkspaceFolder(dir.path());
+  DbConnectionProfile saved;
+  saved.name = "Shop";
+  saved.engine = DbEngine::PostgreSql;
+  saved.host = "db.local";
+  saved.user = "app";
+  saved.database = "shop";
+  dlg.setSavedProfiles({saved});
+  QVERIFY(dlg.isChoosing());
+
+  auto *choices = dlg.findChild<QTreeWidget *>("dbChoices");
+  QVERIFY(choices);
+  QStringList groups;
+  for (int i = 0; i < choices->topLevelItemCount(); ++i) {
+    groups << choices->topLevelItem(i)->text(0);
+  }
+  QCOMPARE(groups.first(), QString("Found in this project"));
+  QVERIFY(groups.contains("Cloud"));
+  QVERIFY(groups.contains("Files"));
+  // The project's database is offered first and marked as already saved.
+  QVERIFY(choices->currentItem());
+  QVERIFY(choices->currentItem()->text(0).contains("DATABASE_URL"));
+  QVERIFY(choices->currentItem()->text(0).contains("saved as Shop"));
+
+  auto *search = dlg.findChild<QLineEdit *>("dbChooserSearch");
+  search->setText("neon");
+  QVERIFY(choices->currentItem());
+  QCOMPARE(choices->currentItem()->text(0), QString("Neon"));
+  search->setText("no such database anywhere");
+  QVERIFY(!choices->currentItem());
+  search->clear();
+
+  // Continue on the detected entry fills the form with its password.
+  for (int i = 0; i < choices->topLevelItemCount(); ++i) {
+    if (choices->topLevelItem(i)->text(0) == "Found in this project") {
+      choices->setCurrentItem(choices->topLevelItem(i)->child(0));
+    }
+  }
+  dlg.findChild<QPushButton *>("dbChooserContinue")->click();
+  QVERIFY(!dlg.isChoosing());
+  const DbConnectionProfile p = dlg.profile();
+  QCOMPARE(p.host, QString("db.local"));
+  QCOMPARE(p.database, QString("shop"));
+  QCOMPARE(dlg.password(), QString("pw"));
+  QVERIFY(p.name.contains("DATABASE_URL"));
+}
+
+void TestDatabasePanel::connectionDialogFillsFormFromUrl() {
+  ConnectionDialog dlg;
+  dlg.applyTheme(testTheme());
+  auto *chooserUrl = dlg.findChild<QLineEdit *>("dbChooserUrl");
+  chooserUrl->setText("mysql://reporter:s3cret@mysql.internal:3307/sales"
+                      "?ssl-mode=REQUIRED");
+  QTest::keyClick(chooserUrl, Qt::Key_Return);
+  QVERIFY(!dlg.isChoosing());
+  DbConnectionProfile p = dlg.profile();
+  QCOMPARE(p.engine, DbEngine::MySql);
+  QCOMPARE(p.host, QString("mysql.internal"));
+  QCOMPARE(p.port, 3307);
+  QCOMPARE(p.user, QString("reporter"));
+  QCOMPARE(p.database, QString("sales"));
+  QCOMPARE(p.sslMode, QString("require"));
+  QCOMPARE(dlg.password(), QString("s3cret"));
+  QVERIFY(!p.name.isEmpty());
+
+  // Typing a different URL into the form's URL field refills it, and the
+  // fields write back to the URL (without the password).
+  auto *url = dlg.findChild<QLineEdit *>("dbConnectionUrl");
+  url->setFocus();
+  url->selectAll();
+  QTest::keyClicks(url, "postgres://ro@pg.example.com/analytics");
+  p = dlg.profile();
+  QCOMPARE(p.engine, DbEngine::PostgreSql);
+  QCOMPARE(p.host, QString("pg.example.com"));
+  QCOMPARE(p.database, QString("analytics"));
+  QCOMPARE(p.port, 0);
+  dlg.findChild<QLineEdit *>("dbDatabase")->setFocus();
+  dlg.findChild<QLineEdit *>("dbDatabase")->setText("warehouse");
+  QCOMPARE(url->text(),
+           QString("postgresql://ro@pg.example.com:5432/warehouse"));
+}
+
+void TestDatabasePanel::connectionDialogTemplatesShapeTheForm() {
+  ConnectionDialog dlg;
+  dlg.applyTheme(testTheme());
+  QVERIFY(dlg.startFromTemplate("supabase"));
+  DbConnectionProfile p = dlg.profile();
+  QCOMPARE(p.engine, DbEngine::PostgreSql);
+  QCOMPARE(p.sslMode, QString("require"));
+  QVERIFY(p.host.isEmpty());
+  QString why;
+  QVERIFY(!p.isValid(&why));
+  QVERIFY(why.contains("host"));
+  auto *host = dlg.findChild<QLineEdit *>("dbHost");
+  QVERIFY(host->placeholderText().contains("supabase.co"));
+  // Saving without a host is refused and says why.
+  dlg.findChild<QPushButton *>("dbSave")->click();
+  QVERIFY(dlg.result() != QDialog::Accepted);
+  QVERIFY(dlg.findChild<QLabel *>("dbTestStatus")->text().contains("host"));
+  host->setText("db.abc.supabase.co");
+  QCOMPARE(dlg.profile().name, QString("Supabase · db"));
+
+  QVERIFY(dlg.startFromTemplate("sqlserver.docker"));
+  p = dlg.profile();
+  QCOMPARE(p.transport, DbTransport::Docker);
+  QCOMPARE(p.user, QString("sa"));
+  QVERIFY(p.sslMode.isEmpty());
+
+  QVERIFY(dlg.startFromTemplate("cockroach.local"));
+  p = dlg.profile();
+  // Loading must not treat the template's "root" as MySQL's default user.
+  QCOMPARE(p.user, QString("root"));
+  QCOMPARE(p.port, 26257);
+  QCOMPARE(p.passwordSource, DbPasswordSource::None);
+  QVERIFY(dlg.password().isEmpty());
+
+  // Switching engines by hand swaps the old engine's defaults.
+  QVERIFY(dlg.startFromTemplate("postgres.local"));
+  auto *engine = dlg.findChild<QComboBox *>("dbEngine");
+  engine->setCurrentIndex(engine->findData(int(DbEngine::MySql)));
+  p = dlg.profile();
+  QCOMPARE(p.user, QString("root"));
+  QCOMPARE(p.effectivePort(), 3306);
+  QVERIFY(!dlg.startFromTemplate("missing.template"));
+}
+
+void TestDatabasePanel::connectionDialogEditsWithoutChooser() {
+  ConnectionDialog dlg;
+  dlg.applyTheme(testTheme());
+  DbConnectionProfile p;
+  p.id = "abc";
+  p.name = "Prod";
+  p.engine = DbEngine::PostgreSql;
+  p.host = "db.prod";
+  p.user = "app";
+  p.sslMode = "verify-full";
+  p.passwordSource = DbPasswordSource::Environment;
+  p.passwordEnv = "PROD_PW";
+  p.color = "#f85149";
+  dlg.setProfile(p);
+  dlg.show();
+  QVERIFY(!dlg.isChoosing());
+  QVERIFY(!dlg.findChild<QPushButton *>("dbBackToChooser")->isVisible());
+  const DbConnectionProfile back = dlg.profile();
+  QCOMPARE(back.id, p.id);
+  QCOMPARE(back.name, p.name);
+  QCOMPARE(back.sslMode, p.sslMode);
+  QCOMPARE(back.passwordSource, p.passwordSource);
+  QCOMPARE(back.passwordEnv, p.passwordEnv);
+  QCOMPARE(back.color, p.color);
+  QVERIFY(back.sameTargetAs(p));
+  QVERIFY(dlg.findChild<QLineEdit *>("dbPasswordEnv")->isVisible());
+  QVERIFY(!dlg.findChild<QLineEdit *>("dbPassword")->isVisible());
+}
+
+void TestDatabasePanel::panelCreatesScratchConnectionFromTemplate() {
+  QTemporaryDir dir;
+  DatabaseManager manager(dir.filePath("connections.json"),
+                          dir.filePath("history.json"));
+  DatabasePanel panel(&manager);
+  panel.applyTheme(testTheme());
+  panel.resize(1000, 600);
+  panel.show();
+  bool dialogSeen = false;
+  QTimer::singleShot(0, this, [&]() {
+    auto *dlg =
+        qobject_cast<ConnectionDialog *>(QApplication::activeModalWidget());
+    QVERIFY(dlg);
+    dialogSeen = true;
+    QVERIFY(!dlg->isChoosing());
+    dlg->findChild<QPushButton *>("dbSaveConnect")->click();
+  });
+  panel.newConnectionFrom("sqlite.memory");
+  QVERIFY(dialogSeen);
+  QCOMPARE(manager.profiles().size(), 1);
+  DbConnection *conn = manager.activeConnection();
+  QVERIFY(conn);
+  QCOMPARE(conn->profile().filePath, QString(":memory:"));
+  QVERIFY(waitUntil([&]() { return conn->isConnected(); }));
+  panel.runSql("CREATE TABLE notes(body TEXT); INSERT INTO notes VALUES ('hi');"
+               " SELECT body FROM notes;");
+  QVERIFY(waitUntil([&]() { return !panel.isRunning(); }));
+  QVERIFY(panel.resultTabs()->count() >= 1);
+}
+
+void TestDatabasePanel::panelReadsPasswordFromEnvironment() {
+  QTemporaryDir dir;
+  QFile env(dir.filePath(".env"));
+  QVERIFY(env.open(QIODevice::WriteOnly));
+  env.write("LP_PANEL_TEST_PASSWORD=from-dotenv\n");
+  env.close();
+  DatabaseManager manager(dir.filePath("connections.json"),
+                          dir.filePath("history.json"));
+  DatabasePanel panel(&manager);
+  panel.setWorkspaceFolder(dir.path());
+  DbConnectionProfile p;
+  p.name = "env";
+  p.engine = DbEngine::PostgreSql;
+  p.host = "127.0.0.1";
+  p.port = 1; // nothing listens there; only the password lookup matters
+  p.clientPath = "/bin/false";
+  p.passwordSource = DbPasswordSource::Environment;
+  p.passwordEnv = "LP_PANEL_TEST_PASSWORD";
+  const QString id = manager.saveProfile(p);
+  DbConnection *conn = manager.connection(id);
+  // No prompt appears: the value comes from the project's .env.
+  QTimer::singleShot(2000, this, []() {
+    if (QWidget *modal = QApplication::activeModalWidget()) {
+      modal->close();
+      QFAIL("A password prompt appeared");
+    }
+  });
+  panel.connectConnection(id, false);
+  QVERIFY(conn->hasSessionPassword());
+  QVERIFY(waitUntil([&]() {
+    return conn->state() == DbConnectionState::Failed ||
+           conn->state() == DbConnectionState::Connected;
+  }));
+  panel.setWorkspaceFolder(QString());
+}
 
 void TestDatabasePanel::largeFontReachesSqlTreeResultsAndDialogs() {
   const QString originalStyle = qApp->styleSheet();

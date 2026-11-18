@@ -1,5 +1,7 @@
 #include "clidialect.h"
 
+#include <QFileInfo>
+#include <QHash>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -17,14 +19,47 @@ QStringList splitArgs(const QString &text) {
   return QProcess::splitCommand(trimmed);
 }
 
+// Runs inside the container: reads the password from stdin, picks the first
+// client that exists, adds the encryption flags for that client's flavour and
+// replaces itself with the client.
 const char *kDockerShellScript =
     "IFS= read -r LP_PW || exit 2; export \"$LP_PWVAR=$LP_PW\"; unset LP_PW; "
     "C=; for p in $LP_CLIENTS; do if command -v \"$p\" >/dev/null 2>&1; then "
     "C=$p; break; fi; done; "
     "if [ -z \"$C\" ]; then echo \"lightpad: no SQL client found in "
-    "container (tried: $LP_CLIENTS)\" >&2; exit 127; fi; exec \"$C\" \"$@\"";
+    "container (tried: $LP_CLIENTS)\" >&2; exit 127; fi; "
+    "LP_SSL=; if [ -n \"$LP_SSL_MYSQL$LP_SSL_MARIADB\" ]; then "
+    "case \"$(\"$C\" --version 2>&1)\" in *MariaDB*) LP_SSL=$LP_SSL_MARIADB;; "
+    "*) LP_SSL=$LP_SSL_MYSQL;; esac; fi; "
+    "exec \"$C\" $LP_SSL \"$@\"";
 
 } // namespace
+
+bool CliDialect::isMariaDbClient(const QString &program) {
+  if (QFileInfo(program).fileName().startsWith(QLatin1String("mariadb"))) {
+    return true;
+  }
+  static QHash<QString, bool> cache;
+  const QString resolved = QStandardPaths::findExecutable(program).isEmpty()
+                               ? program
+                               : QStandardPaths::findExecutable(program);
+  const auto cached = cache.constFind(resolved);
+  if (cached != cache.constEnd()) {
+    return cached.value();
+  }
+  QProcess probe;
+  probe.setProcessChannelMode(QProcess::MergedChannels);
+  probe.start(resolved, {QStringLiteral("--version")});
+  bool mariaDb = false;
+  if (probe.waitForFinished(3000)) {
+    mariaDb = probe.readAll().contains("MariaDB");
+  } else {
+    probe.kill();
+    probe.waitForFinished(500);
+  }
+  cache.insert(resolved, mariaDb);
+  return mariaDb;
+}
 
 QString CliDialect::startupError(const QString &err, const QString &out) const {
   const QString text = (err.trimmed().isEmpty() ? out : err).trimmed();
@@ -48,7 +83,13 @@ CliLaunch CliDialect::launch(const DbConnectionProfile &profile,
                       QStringLiteral("LP_PWVAR=") + passwordVariable(),
                       QStringLiteral("-e"),
                       QStringLiteral("LP_CLIENTS=") + clients.join(' ')};
-    const QMap<QString, QString> env = clientEnvironment(profile);
+    QMap<QString, QString> env = clientEnvironment(profile);
+    const QStringList mysqlSsl = sslArguments(profile, false);
+    const QStringList mariaSsl = sslArguments(profile, true);
+    if (!mysqlSsl.isEmpty() || !mariaSsl.isEmpty()) {
+      env.insert(QStringLiteral("LP_SSL_MYSQL"), mysqlSsl.join(' '));
+      env.insert(QStringLiteral("LP_SSL_MARIADB"), mariaSsl.join(' '));
+    }
     for (auto it = env.begin(); it != env.end(); ++it) {
       spec.arguments << QStringLiteral("-e")
                      << it.key() + QLatin1Char('=') + it.value();
@@ -80,7 +121,11 @@ CliLaunch CliDialect::launch(const DbConnectionProfile &profile,
     return spec;
   }
   spec.program = program;
-  spec.arguments = clientArguments(profile, false) + extra;
+  spec.arguments = clientArguments(profile, false);
+  if (!profile.sslMode.isEmpty()) {
+    spec.arguments += sslArguments(profile, isMariaDbClient(program));
+  }
+  spec.arguments += extra;
   spec.environment = clientEnvironment(profile);
   if (!password.isEmpty()) {
     spec.environment.insert(passwordVariable(), password);
@@ -266,10 +311,14 @@ public:
   }
 
   QMap<QString, QString>
-  clientEnvironment(const DbConnectionProfile &) const override {
-    return {{"PGCONNECT_TIMEOUT", "15"},
-            {"PGCLIENTENCODING", "UTF8"},
-            {"PGAPPNAME", "Lightpad"}};
+  clientEnvironment(const DbConnectionProfile &p) const override {
+    QMap<QString, QString> env = {{"PGCONNECT_TIMEOUT", "15"},
+                                  {"PGCLIENTENCODING", "UTF8"},
+                                  {"PGAPPNAME", "Lightpad"}};
+    if (!p.sslMode.isEmpty()) {
+      env.insert(QStringLiteral("PGSSLMODE"), p.sslMode);
+    }
+    return env;
   }
 
   QByteArray frame(const QString &statement, SqlStatementKind,
@@ -396,6 +445,39 @@ public:
       args << "-D" << p.database;
     }
     return args;
+  }
+
+  QStringList sslArguments(const DbConnectionProfile &p,
+                           bool mariaDb) const override {
+    const QString mode = p.sslMode;
+    if (mode.isEmpty()) {
+      return {};
+    }
+    if (mariaDb) {
+      // MariaDB's client has no --ssl-mode; the skip- form of the
+      // verification switch is understood by every version.
+      if (mode == QLatin1String("disable")) {
+        return {QStringLiteral("--skip-ssl")};
+      }
+      if (mode == QLatin1String("prefer")) {
+        return {};
+      }
+      if (mode == QLatin1String("require")) {
+        return {QStringLiteral("--ssl"),
+                QStringLiteral("--skip-ssl-verify-server-cert")};
+      }
+      return {QStringLiteral("--ssl"),
+              QStringLiteral("--ssl-verify-server-cert")};
+    }
+    static const QMap<QString, QString> modes = {
+        {QStringLiteral("disable"), QStringLiteral("DISABLED")},
+        {QStringLiteral("prefer"), QStringLiteral("PREFERRED")},
+        {QStringLiteral("require"), QStringLiteral("REQUIRED")},
+        {QStringLiteral("verify-ca"), QStringLiteral("VERIFY_CA")},
+        {QStringLiteral("verify-full"), QStringLiteral("VERIFY_IDENTITY")}};
+    const QString value = modes.value(mode);
+    return value.isEmpty() ? QStringList()
+                           : QStringList{QStringLiteral("--ssl-mode=") + value};
   }
 
   QByteArray frame(const QString &statement, SqlStatementKind kind,

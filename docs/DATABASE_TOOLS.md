@@ -19,14 +19,93 @@ nothing installed on the host but Docker.
 ## Getting started
 
 1. Open the panel: **Database → Database Panel** (`Ctrl+Shift+D`).
-2. Click **+** (New connection). Running database containers are listed at the
-   top of the dialog; click one and the engine, container, user, database and
-   (when the image was started with one) the password are filled in.
-3. For SQLite, use **Browse…** for an existing file or **New…** to create one.
-   SQLite files can also be opened directly from the IDE's file explorer.
-4. **Test connection**, then **Save & Connect**.
+2. Click **+** (New connection). The dialog starts with where your database
+   might already be:
+   * **Found in this project**: `DATABASE_URL` and similar variables (or
+     `DB_HOST`/`DB_USER`/…, `POSTGRES_*`, `MYSQL_*`, `PG*`) in the project's
+     `.env` files, database services in `compose.yaml`/`docker-compose.yml`,
+     and SQLite files such as `db.sqlite3`.
+   * **Running in Docker**: database containers; the user, database and
+     password are read from the container's environment.
+   * **Templates**: local PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB
+     and YugabyteDB; the same engines inside Docker; SQLite files and an
+     in-memory scratch database; and managed services (Supabase, Neon, Amazon
+     RDS/Aurora, Google Cloud SQL, Azure, PlanetScale, DigitalOcean, Heroku,
+     Render, Railway, CockroachDB Cloud, Timescale, TiDB Cloud). Cloud
+     templates set the port, user, database and TLS mode the service expects
+     and say where to find the rest.
+   Or paste a **connection URL** at the top; see below for the formats.
+3. The form shows only what the chosen engine and transport use. Its
+   **Connection URL** field stays in sync with the fields; paste a URL there
+   to fill them in. **Copy** copies the URL without the password.
+4. **Test Connection** reports the server version and the time it took, then
+   **Save & Connect**.
 5. Type SQL in the console and press `Ctrl+Enter`, or open a `.sql` file and
    press `F9`.
+
+### Connection URLs
+
+Anything the usual tools and cloud consoles hand out is understood:
+
+| Form | Example |
+|------|---------|
+| URL | `postgresql://user:pw@host:5432/db?sslmode=require`, `mysql://user@host/db?ssl-mode=REQUIRED`, `sqlserver://sa@host:1433?database=master` |
+| SQLAlchemy / Prisma | `postgresql+psycopg2://…`, `mysql+pymysql://…`, `sqlite:///relative.db`, `sqlite:////abs/path.db`, `file:./dev.db` |
+| JDBC | `jdbc:postgresql://…`, `jdbc:mysql://…?useSSL=false`, `jdbc:sqlserver://host:1433;databaseName=db;user=sa;encrypt=true` |
+| ADO.NET / ODBC | `Server=tcp:host,1433;Initial Catalog=db;User ID=u;Password=p;`, Npgsql `Host=…;Username=…`, MySQL `Server=…;Uid=…;Pwd=…`, `Driver={PostgreSQL Unicode};…` |
+| libpq | `host=… port=… dbname=… user=… sslmode=verify-full` |
+| `.env` line | `DATABASE_URL="postgres://…"` |
+
+Relative SQLite paths resolve against the project folder. A password in the
+URL is used for the session and never saved.
+
+### Passwords and encryption
+
+**Password** has three sources: *Ask once per session* (the default; the
+password stays in memory until Lightpad closes), *No password* (trust, peer
+or certificate authentication), and *From an environment variable*, read
+from Lightpad's environment or, failing that, the project's `.env` /
+`.env.local` each time the connection opens.
+
+**Encryption** (PostgreSQL, MySQL/MariaDB) uses libpq's names: *Off*,
+*Prefer*, *Require TLS*, *verify the certificate*, *verify certificate and
+host*. Lightpad passes them as `PGSSLMODE` to psql, `--ssl-mode` to MySQL's
+client, and `--ssl`/`--skip-ssl`/`--ssl-verify-server-cert` to MariaDB's
+client (detected from `--version`, also inside containers). SQL Server
+connections keep the *Trust the server certificate* switch.
+
+### Your own templates
+
+Add templates (or replace built-in ones by `id`) in
+`~/.config/Lightpad/Lightpad/database/connection_templates.json`:
+
+```json
+{
+  "categories": ["Team"],
+  "templates": [
+    {
+      "id": "team.staging",
+      "category": "Team",
+      "name": "Staging PostgreSQL",
+      "engine": "postgresql",
+      "description": "The shared staging database.",
+      "help": "Ask #infra for access.",
+      "host": "staging-db.internal",
+      "port": 5432,
+      "user": "",
+      "userPlaceholder": "your.name",
+      "database": "app",
+      "sslMode": "verify-full"
+    }
+  ]
+}
+```
+
+Fields: `engine` (`postgresql`, `mysql`, `sqlserver`, `sqlite`), `transport`
+(`docker`), `host`, `port`, `user`, `database`, `file`, `sslMode`,
+`trustServerCertificate`, `password` (`"none"`), `readOnly`, `color`, and the
+`hostPlaceholder`/`userPlaceholder`/`databasePlaceholder`, `help`, `docs` and
+`keywords` shown in the dialog.
 
 The schema browser, SQL Console, completion popup, result grids, Messages,
 Storage and Insights follow the
@@ -204,8 +283,9 @@ the server. Completion and catalog diagnostics share the same query scopes.
   `DELETE`/`UPDATE` without `WHERE` ask first.
 * **Colour tags** (green/amber/red …) colour the connection and a strip above
   the console, so production is hard to mistake for a dev database.
-* **Passwords are never written to disk.** They live in memory for the session;
-  a rejected login is forgotten. In Docker mode the password reaches the client
+* **Passwords are never written to disk.** They live in memory for the session
+  (or are read from an environment variable when the connection says so); a
+  rejected login is forgotten. In Docker mode the password reaches the client
   through stdin, not through `docker exec` arguments or `ps`; in direct mode it
   is passed through the client's password environment variable.
 * Only `connections.json` (without passwords) and `history.json` are stored, in
@@ -242,6 +322,9 @@ App/database/                 (no GUI, unit-tested)
   dbstatistics       database/table allocations and row estimates
   sqlquerycontext    SQL scopes, CTEs, derived columns and visible aliases
   sqlcompletion      query- and schema-aware suggestions
+  dbconnectionurl    connection strings (URL, JDBC, ADO.NET, libpq) in and out
+  dbconnectiontemplates  connection_templates.json catalog (built-in + user)
+  dbprojectdiscovery .env / compose / SQLite detection, password variables
   resultexporter, columnprofiler, dockerdiscovery, connectionstore, queryhistory
 App/ui/panels/                databasepanel, dbresultview, dbinsightsview, dbstorageview, sqlconsoleedit
 App/ui/dialogs/               connectiondialog, queryhistorydialog
@@ -259,8 +342,12 @@ engine that has a scriptable CLI means implementing one `CliDialect`.
 ## Testing
 
 ```
-ctest -R "SqlStatementSplitter|DatabaseCore|DatabaseTools|DatabasePanel|DatabaseLive"
+ctest -R "SqlStatementSplitter|DatabaseCore|DatabaseConnections|DatabaseTools|DatabasePanel|DatabaseLive"
 ```
+
+`DatabaseConnectionsTests` covers connection strings, templates, project
+detection, password sources and the TLS flags per client; the connection
+dialog itself is tested in `DatabasePanelTests`.
 
 `DatabaseLiveTests` always exercises SQLite. To run the same workflow against
 real servers, start containers and point the test at them:

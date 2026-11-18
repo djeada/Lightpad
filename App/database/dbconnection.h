@@ -47,7 +47,13 @@ public:
 
   void connectToServer(const QString &password);
 
+  // Connects with the remembered password, or the one the profile names (an
+  // environment variable, or none at all). False when a password must be
+  // asked for first.
   bool reconnect();
+  // Fills in the password from the profile's source when it does not need
+  // to be asked for. False for "ask" profiles.
+  bool resolvePassword();
   void disconnectFromServer();
 
   quint64 execute(const QStringList &statements, bool stopOnError = true);

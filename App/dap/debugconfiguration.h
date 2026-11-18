@@ -175,6 +175,20 @@ struct DebugConfiguration {
   }
 };
 
+// How a launch configuration starts without a debugger: Run uses this,
+// Debug hands the configuration to a debug adapter instead.
+struct RunCommand {
+  QString program;
+  QStringList arguments;
+  // Added on top of the configuration's own environment.
+  QMap<QString, QString> environment;
+  // Set when the configuration cannot run without a debugger (attach
+  // requests, for example).
+  QString error;
+
+  bool isValid() const { return error.isEmpty() && !program.isEmpty(); }
+};
+
 struct CompoundDebugConfiguration {
   QString name;
   QStringList configurations;
@@ -204,6 +218,10 @@ struct CompoundDebugConfiguration {
   }
 };
 
+// Named launch configurations of a workspace, stored in
+// .lightpad/debug/launch.json in VS Code's launch.json format. Every
+// configuration can be run (without a debugger) or debugged; compounds start
+// several configurations together. Order follows the file.
 class DebugConfigurationManager : public QObject {
   Q_OBJECT
 
@@ -227,14 +245,22 @@ public:
   static QStringList splitCommandLineArguments(const QString &commandLine);
 
   DebugConfiguration configuration(const QString &name) const;
+  bool hasConfiguration(const QString &name) const;
 
   QList<DebugConfiguration> allConfigurations() const;
 
   QList<DebugConfiguration> configurationsForType(const QString &type) const;
 
   void addCompoundConfiguration(const CompoundDebugConfiguration &config);
+  void replaceCompoundConfigurations(
+      const QList<CompoundDebugConfiguration> &compounds);
+  CompoundDebugConfiguration compoundConfiguration(const QString &name) const;
+  bool hasCompoundConfiguration(const QString &name) const;
 
   QList<CompoundDebugConfiguration> allCompoundConfigurations() const;
+
+  // A name based on baseName that no configuration or compound uses yet.
+  QString uniqueName(const QString &baseName) const;
 
   void setWorkspaceFolder(const QString &folder);
   QString workspaceFolder() const { return m_workspaceFolder; }
@@ -249,17 +275,26 @@ public:
   createPytestConfig(const QStringList &targets,
                      const TestConfiguration &testConfig) const;
 
+  // Loads the workspace's launch.json. A missing file means "no saved
+  // configurations"; nothing is written until the user saves one.
   bool loadFromLightpadDir();
 
   bool saveToLightpadDir();
 
   QString lightpadLaunchConfigPath() const;
 
+  // Earlier versions seeded every project with these example entries. They
+  // are hidden when unmodified so they do not crowd the launch menus.
+  static bool isLegacySampleConfiguration(const QJsonObject &object);
+  static bool isLegacySampleCompound(const QJsonObject &object);
+
 signals:
   void configurationAdded(const QString &name);
   void configurationRemoved(const QString &name);
   void configurationChanged(const QString &name);
   void configurationsLoaded();
+  // Emitted after any change to configurations or compounds.
+  void configurationsChanged();
 
 private:
   DebugConfigurationManager();
@@ -268,13 +303,15 @@ private:
   DebugConfigurationManager &
   operator=(const DebugConfigurationManager &) = delete;
 
+  int indexOf(const QString &name) const;
+  int compoundIndexOf(const QString &name) const;
   QString
   substituteVariable(const QString &value, const QString &currentFile,
                      const PythonEnvironmentPreference &pythonPreference,
                      const QString &workingDirectory = {}) const;
 
-  QMap<QString, DebugConfiguration> m_configurations;
-  QMap<QString, CompoundDebugConfiguration> m_compoundConfigurations;
+  QList<DebugConfiguration> m_configurations;
+  QList<CompoundDebugConfiguration> m_compoundConfigurations;
   QString m_workspaceFolder;
   QString m_configFilePath;
 };

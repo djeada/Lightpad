@@ -121,6 +121,71 @@ inline QIcon icon(Glyph glyph, const QColor &color, int size = 16) {
   return QIcon(pixmap);
 }
 
+// Breakpoint markers for lists, drawn like the editor gutter: a dot for a
+// line breakpoint (with bars when conditional), a diamond for a logpoint, a
+// rounded square for a function breakpoint, a hexagon for a data breakpoint
+// and a "!" badge for an exception filter. Breakpoints the debugger has not
+// bound yet are drawn as rings.
+enum class Marker { Line, Conditional, Logpoint, Function, Data, Exception };
+
+inline QIcon breakpointMarker(Marker marker, const QColor &color,
+                              bool bound = true, int size = 14) {
+  const qreal ratio =
+      QGuiApplication::instance() ? qGuiApp->devicePixelRatio() : 1.0;
+  QPixmap pixmap(QSize(size, size) * ratio);
+  pixmap.setDevicePixelRatio(ratio);
+  pixmap.fill(Qt::transparent);
+  QPainter painter(&pixmap);
+  painter.setRenderHint(QPainter::Antialiasing, true);
+  painter.scale(size / 16.0, size / 16.0);
+  if (bound) {
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(color);
+  } else {
+    painter.setPen(QPen(color, 1.8));
+    painter.setBrush(Qt::NoBrush);
+  }
+  const QRectF box(2.5, 2.5, 11, 11);
+  switch (marker) {
+  case Marker::Line:
+  case Marker::Conditional:
+    painter.drawEllipse(box);
+    if (marker == Marker::Conditional && bound) {
+      painter.setPen(QPen(QColor(255, 255, 255, 230), 1.6));
+      painter.drawLine(QPointF(5.5, 6.6), QPointF(10.5, 6.6));
+      painter.drawLine(QPointF(5.5, 9.4), QPointF(10.5, 9.4));
+    }
+    break;
+  case Marker::Logpoint: {
+    QPolygonF diamond;
+    diamond << QPointF(8, 1.8) << QPointF(14.2, 8) << QPointF(8, 14.2)
+            << QPointF(1.8, 8);
+    painter.drawPolygon(diamond);
+    break;
+  }
+  case Marker::Function:
+    painter.drawRoundedRect(box, 3, 3);
+    break;
+  case Marker::Data: {
+    QPolygonF hexagon;
+    hexagon << QPointF(8, 1.8) << QPointF(13.6, 5) << QPointF(13.6, 11)
+            << QPointF(8, 14.2) << QPointF(2.4, 11) << QPointF(2.4, 5);
+    painter.drawPolygon(hexagon);
+    break;
+  }
+  case Marker::Exception: {
+    painter.drawEllipse(box);
+    painter.setPen(QPen(bound ? QColor(255, 255, 255, 235) : color, 1.8,
+                        Qt::SolidLine, Qt::RoundCap));
+    painter.drawLine(QPointF(8, 5), QPointF(8, 8.8));
+    painter.drawPoint(QPointF(8, 11.2));
+    break;
+  }
+  }
+  painter.end();
+  return QIcon(pixmap);
+}
+
 } // namespace DebugGlyphs
 
 #endif

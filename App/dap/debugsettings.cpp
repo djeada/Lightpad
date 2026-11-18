@@ -70,9 +70,8 @@ void DebugSettings::ensureDirectoryExists() {
                  .arg(debugSettingsDir()));
   }
 
-  if (!QFile::exists(launchConfigPath())) {
-    createDefaultLaunchConfig();
-  }
+  // launch.json is only written when the user saves a configuration; see
+  // DebugConfigurationManager.
   if (!QFile::exists(breakpointsConfigPath())) {
     createDefaultBreakpointsConfig();
   }
@@ -85,99 +84,6 @@ void DebugSettings::ensureDirectoryExists() {
   if (!QFile::exists(settingsConfigPath())) {
     createDefaultSettingsConfig();
   }
-}
-
-void DebugSettings::createDefaultLaunchConfig() {
-  QJsonObject config;
-  config["version"] = "1.0.0";
-  config["_comment"] = "Debug launch configurations. Edit this file to add "
-                       "your own configurations.";
-
-  QJsonArray configurations;
-
-  QJsonObject pythonConfig;
-  pythonConfig["name"] = "Python: Current File";
-  pythonConfig["adapterId"] = "python-debugpy";
-  pythonConfig["type"] = "debugpy";
-  pythonConfig["request"] = "launch";
-  pythonConfig["program"] = "${file}";
-  pythonConfig["console"] = "integratedTerminal";
-  pythonConfig["cwd"] = "${workspaceFolder}";
-  pythonConfig["_comment"] = "Example Python debug configuration";
-  configurations.append(pythonConfig);
-
-  QJsonObject cppConfig;
-  cppConfig["name"] = "C++: GDB Launch";
-  cppConfig["adapterId"] = "cppdbg-gdb";
-  cppConfig["type"] = "cppdbg";
-  cppConfig["request"] = "launch";
-  cppConfig["program"] = "${workspaceFolder}/a.out";
-  cppConfig["args"] = QJsonArray();
-  cppConfig["stopAtEntry"] = false;
-  cppConfig["cwd"] = "${workspaceFolder}";
-  cppConfig["environment"] = QJsonArray();
-  cppConfig["externalConsole"] = false;
-  cppConfig["MIMode"] = "gdb";
-  cppConfig["miDebuggerPath"] = "gdb";
-
-  QJsonArray setupCommands;
-  QJsonObject prettyPrint;
-  prettyPrint["description"] = "Enable pretty-printing for gdb";
-  prettyPrint["text"] = "-enable-pretty-printing";
-  prettyPrint["ignoreFailures"] = true;
-  setupCommands.append(prettyPrint);
-  cppConfig["setupCommands"] = setupCommands;
-  cppConfig["_comment"] = "Example C++ GDB debug configuration";
-  configurations.append(cppConfig);
-
-  QJsonObject nodeConfig;
-  nodeConfig["name"] = "Node.js: Current File";
-  nodeConfig["adapterId"] = "node-debug";
-  nodeConfig["type"] = "node";
-  nodeConfig["request"] = "launch";
-  nodeConfig["program"] = "${file}";
-  nodeConfig["cwd"] = "${workspaceFolder}";
-  nodeConfig["console"] = "integratedTerminal";
-  nodeConfig["_comment"] = "Example Node.js debug configuration";
-  configurations.append(nodeConfig);
-
-  QJsonObject goConfig;
-  goConfig["name"] = "Go: Current File";
-  goConfig["adapterId"] = "go-delve";
-  goConfig["type"] = "go";
-  goConfig["request"] = "launch";
-  goConfig["mode"] = "debug";
-  goConfig["program"] = "${file}";
-  goConfig["cwd"] = "${workspaceFolder}";
-  goConfig["_comment"] = "Example Go debug configuration using Delve";
-  configurations.append(goConfig);
-
-  QJsonObject rustConfig;
-  rustConfig["name"] = "Rust: Debug Binary";
-  rustConfig["adapterId"] = "rust-codelldb";
-  rustConfig["type"] = "lldb";
-  rustConfig["request"] = "launch";
-  rustConfig["program"] =
-      "${workspaceFolder}/target/debug/${workspaceFolderBasename}";
-  rustConfig["cwd"] = "${workspaceFolder}";
-  rustConfig["args"] = QJsonArray();
-  rustConfig["_comment"] = "Example Rust debug configuration using CodeLLDB";
-  configurations.append(rustConfig);
-
-  config["configurations"] = configurations;
-
-  QJsonArray compounds;
-  QJsonObject exampleCompound;
-  exampleCompound["name"] = "Server + Client";
-  exampleCompound["configurations"] = QJsonArray({"Server", "Client"});
-  exampleCompound["stopAll"] = true;
-  exampleCompound["_comment"] =
-      "Example compound configuration for debugging multiple targets";
-  compounds.append(exampleCompound);
-  config["compounds"] = compounds;
-
-  writeJsonFile(launchConfigPath(), config);
-  LOG_INFO("Created default launch.json");
 }
 
 void DebugSettings::createDefaultBreakpointsConfig() {

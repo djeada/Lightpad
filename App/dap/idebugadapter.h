@@ -158,6 +158,25 @@ public:
     return arguments;
   }
 
+  // The command Run uses for this configuration (no debugger attached). By
+  // default the program itself is executed; adapters whose "program" is a
+  // script or package prepend the runtime that executes it.
+  virtual RunCommand runCommand(const DebugConfiguration &configuration) const {
+    RunCommand command;
+    if (configuration.request.compare(QLatin1String("attach"),
+                                      Qt::CaseInsensitive) == 0) {
+      command.error = QStringLiteral(
+          "Attach configurations connect to a running program; use Debug.");
+      return command;
+    }
+    command.program = configuration.program;
+    command.arguments = configuration.args;
+    if (command.program.isEmpty()) {
+      command.error = QStringLiteral("The configuration has no program.");
+    }
+    return command;
+  }
+
   virtual QJsonObject createAttachConfig(int processId = 0,
                                          const QString &host = {},
                                          int port = 0) const = 0;

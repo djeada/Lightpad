@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check saved debug arguments through real MainWindow instances after reopening."""
+"""Check saved launch arguments through real MainWindow instances after reopening."""
 
 import json
 import os
@@ -25,7 +25,9 @@ DRIVER = r"""
 #include <cstdlib>
 #include <functional>
 #include "ui/mainwindow.h"
-#include "ui/dialogs/debugconfigurationdialog.h"
+#include "ui/dialogs/launchconfigurationsdialog.h"
+#include <QTreeWidget>
+#include <QPushButton>
 #include "dap/debugsession.h"
 #include "settings/settingsmanager.h"
 
@@ -60,27 +62,34 @@ int main(int argc, char **argv) {
     if (mode == "save") {
       require(QMetaObject::invokeMethod(
                   &window, "on_actionEdit_Debug_Configurations_triggered"),
-              "could not open debug configurations");
-      auto *dialog = window.findChild<DebugConfigurationDialog *>();
-      require(dialog, "configuration dialog missing");
-      QLineEdit *arguments = nullptr;
-      for (auto *edit : dialog->findChildren<QLineEdit *>())
-        if (edit->placeholderText() == "Program arguments (space-separated)")
-          arguments = edit;
+              "could not open the configurations dialog");
+      auto *dialog = window.findChild<LaunchConfigurationsDialog *>();
+      require(dialog, "configurations dialog missing");
+      auto *entries = dialog->findChild<QTreeWidget *>("launchEntries");
+      require(entries, "configuration list missing");
+      const auto found = entries->findItems(
+          "C++: GDB Launch", Qt::MatchExactly | Qt::MatchRecursive);
+      require(found.size() == 1, "saved configuration not listed");
+      entries->setCurrentItem(found.first());
+      auto *arguments = dialog->findChild<QLineEdit *>("launchArguments");
       require(arguments, "Arguments field missing");
       arguments->setText("REOPEN_ARG");
-      require(QMetaObject::invokeMethod(dialog, "onSave"),
-              "could not save debug arguments");
-      require(settings.getValue("activeDebugTarget").toString() ==
+      auto *save = dialog->findChild<QPushButton *>("launchSaveButton");
+      require(save, "Save button missing");
+      save->click();
+      require(settings.getValue("activeLaunchTarget").toString() ==
                   "C++: GDB Launch",
               "saving did not select the configuration");
       require(settings.saveSettings(), "could not persist selected target");
     } else {
-      require(settings.getValue("activeDebugTarget").toString() ==
+      require(settings.getValue("activeLaunchTarget").toString() ==
                   "C++: GDB Launch",
               "reopening lost the selected configuration");
-      require(button->text().contains("C++: GDB Launch"),
-              "Debug button lost the selected configuration");
+      auto *run = window.findChild<QToolButton *>("runButton");
+      require(run && run->text().contains("C++: GDB Launch"),
+              "Run button lost the selected configuration");
+      require(button->accessibleName().contains("C++: GDB Launch"),
+              "Debug button does not name the selected configuration");
       const QString proof = workspace + "/received.txt";
       QFile::remove(proof);
       QStringList actualArguments;
@@ -90,7 +99,10 @@ int main(int argc, char **argv) {
         if (auto *session = sessions.session(id))
           actualArguments = session->configuration().args;
       });
-      if (mode == "button") {
+      if (mode == "run") {
+        // Run starts the same saved configuration without a debugger.
+        run->click();
+      } else if (mode == "button") {
         button->click();
       } else if (mode == "menu") {
         auto *action = window.findChild<QAction *>("actionDebug_file_name");
@@ -106,11 +118,12 @@ int main(int argc, char **argv) {
             debug = action;
         require(debug, "Run menu Debug action missing");
         require(debug->text().contains("C++: GDB Launch"),
-                "Run menu does not identify the selected debug profile");
+                "Run menu does not identify the selected configuration");
         debug->trigger();
       }
       waitFor([&]() { return QFileInfo(proof).size() > 0; });
-      require(actualArguments == QStringList{"REOPEN_ARG"},
+      require(mode == "run" ? actualArguments.isEmpty()
+                            : actualArguments == QStringList{"REOPEN_ARG"},
               "debug session lost the saved argument");
       QFile received(proof);
       require(received.open(QIODevice::ReadOnly), "cannot read argument proof");
@@ -274,7 +287,7 @@ def main():
             path = root / folder
             path.mkdir(exist_ok=True)
             environment[key] = str(path)
-        for mode in ("save", "button", "menu", "run-menu"):
+        for mode in ("save", "button", "menu", "run-menu", "run"):
             result = subprocess.run(
                 [str(binary), mode, str(workspace)],
                 cwd=workspace,
@@ -286,6 +299,7 @@ def main():
             )
             if result.returncode:
                 print((result.stdout + result.stderr)[-12000:])
+                print(f"FAIL: {mode} exited with code {result.returncode}")
                 return 1
             print(
                 "\n".join(

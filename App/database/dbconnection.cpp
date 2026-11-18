@@ -1,6 +1,7 @@
 #include "dbconnection.h"
 
 #include "clisession.h"
+#include "dbprojectdiscovery.h"
 #include "sqlitesession.h"
 #include "sqlstatementsplitter.h"
 
@@ -55,22 +56,37 @@ void DbConnection::setMaxRows(int rows) {
 }
 
 void DbConnection::setProfile(const DbConnectionProfile &profile) {
-  const bool targetChanged =
-      profile.engine != m_profile.engine ||
-      profile.transport != m_profile.transport ||
-      profile.host != m_profile.host || profile.port != m_profile.port ||
-      profile.user != m_profile.user ||
-      profile.container != m_profile.container ||
-      profile.filePath != m_profile.filePath ||
-      profile.clientPath != m_profile.clientPath ||
-      profile.extraArgs != m_profile.extraArgs ||
-      profile.readOnly != m_profile.readOnly ||
-      profile.trustServerCertificate != m_profile.trustServerCertificate;
+  const bool targetChanged = !profile.sameTargetAs(m_profile);
+  const bool databaseChanged = profile.database != m_profile.database;
+  const QString activeDatabase = m_profile.database;
   m_profile = profile;
-  if (targetChanged && m_state != DbConnectionState::Disconnected) {
+  if (m_state == DbConnectionState::Disconnected) {
+    return;
+  }
+  if (targetChanged) {
     disconnectFromServer();
     m_hasPassword = false;
     m_password.clear();
+  } else if (databaseChanged) {
+    // The open session still uses the old database until it switches; keep
+    // reporting that one so the panel never shows a database it is not in.
+    m_profile.database = activeDatabase;
+    if (profile.database.isEmpty()) {
+      return;
+    }
+    if (DbCatalog::useDatabaseStatement(profile.engine, profile.database)
+            .isEmpty()) {
+      // psql cannot switch databases inside a session: reconnect instead.
+      m_profile.database = profile.database;
+      const QString password = m_password;
+      const bool hadPassword = m_hasPassword;
+      disconnectFromServer();
+      if (hadPassword || !profile.needsPassword()) {
+        connectToServer(password);
+      }
+    } else {
+      switchDatabase(profile.database);
+    }
   }
 }
 
@@ -103,7 +119,7 @@ bool DbConnection::reconnect() {
   if (m_state == DbConnectionState::Connecting) {
     return true;
   }
-  if (!m_hasPassword && m_profile.engine != DbEngine::Sqlite) {
+  if (!m_hasPassword && !resolvePassword()) {
     return false;
   }
   if (m_state == DbConnectionState::Connected) {
@@ -111,6 +127,26 @@ bool DbConnection::reconnect() {
   }
   connectToServer(m_password);
   return true;
+}
+
+bool DbConnection::resolvePassword() {
+  switch (m_profile.passwordSource) {
+  case DbPasswordSource::None:
+    rememberPassword(QString());
+    return true;
+  case DbPasswordSource::Environment: {
+    bool found = false;
+    const QString value =
+        DbProjectDiscovery::environmentValue(m_profile.passwordEnv, &found);
+    if (found) {
+      rememberPassword(value);
+    }
+    return found;
+  }
+  case DbPasswordSource::Ask:
+    break;
+  }
+  return m_profile.engine == DbEngine::Sqlite;
 }
 
 void DbConnection::disconnectFromServer() {
@@ -148,7 +184,8 @@ void DbConnection::onOpened() {
 void DbConnection::onOpenFailed(const QString &message) {
   destroySession();
 
-  if (m_profile.engine != DbEngine::Sqlite) {
+  if (m_profile.needsPassword()) {
+    // A rejected password must be asked for (or re-read) again.
     m_password.clear();
     m_hasPassword = false;
   }

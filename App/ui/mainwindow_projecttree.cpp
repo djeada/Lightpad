@@ -17,6 +17,10 @@ void MainWindow::setProjectRootPath(const QString &path) {
   }
 
   m_projectRootPath = normalizedPath;
+  DbProjectDiscovery::setWorkspaceFolder(normalizedPath);
+  if (databasePanel) {
+    databasePanel->setWorkspaceFolder(normalizedPath);
+  }
 
   if (previousRoot != normalizedPath) {
     m_treeExpandedPaths.clear();
@@ -81,7 +85,8 @@ void MainWindow::setProjectRootPath(const QString &path) {
     WatchManager::instance().loadFromLightpadDir();
   }
 
-  refreshDebugTargetButton();
+  invalidateRunTargetCache();
+  refreshLaunchButtons();
   refreshTestTargetButton();
 
   if (testPanel) {

@@ -2,7 +2,6 @@
 #include "../textarea.h"
 #include <QContextMenuEvent>
 #include <QHelpEvent>
-#include <QInputDialog>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPaintEvent>
@@ -15,6 +14,7 @@
 #include "../../core/lightpadpage.h"
 #include "../../core/lightpadtabwidget.h"
 #include "../../dap/breakpointmanager.h"
+#include "../../ui/dialogs/breakpointeditordialog.h"
 #include "../../ui/mainwindow.h"
 #include "../../ui/uistylehelper.h"
 #include "../../ui/widgets/gitblamewidget.h"
@@ -509,19 +509,23 @@ void LineNumberArea::contextMenuEvent(QContextMenuEvent *event) {
   QString filePath = resolveFilePath();
 
   QMenu menu(this);
-  QAction *breakpointAction = menu.addAction(tr("Toggle Breakpoint"));
   const Breakpoint existing =
       filePath.isEmpty()
           ? Breakpoint()
           : BreakpointManager::instance().breakpointAt(filePath, clickedLine);
   const bool hasExisting = existing.id > 0;
+  QAction *breakpointAction = menu.addAction(
+      hasExisting ? tr("Remove Breakpoint") : tr("Add Breakpoint"));
+  // One editor holds the condition, hit count and log message.
   QAction *conditionAction =
-      menu.addAction(hasExisting ? tr("Edit Condition...")
+      menu.addAction(hasExisting ? tr("Edit Breakpoint...")
                                  : tr("Add Conditional Breakpoint..."));
-  QAction *logpointAction = menu.addAction(hasExisting ? tr("Edit Logpoint...")
-                                                       : tr("Add Logpoint..."));
+  QAction *logpointAction =
+      hasExisting ? nullptr : menu.addAction(tr("Add Logpoint..."));
   conditionAction->setEnabled(!filePath.isEmpty());
-  logpointAction->setEnabled(!filePath.isEmpty());
+  if (logpointAction) {
+    logpointAction->setEnabled(!filePath.isEmpty());
+  }
   QAction *enableAction = nullptr;
   if (hasExisting) {
     enableAction = menu.addAction(existing.enabled ? tr("Disable Breakpoint")
@@ -530,14 +534,7 @@ void LineNumberArea::contextMenuEvent(QContextMenuEvent *event) {
   menu.addSeparator();
   QAction *blameAction = menu.addAction(tr("Git Blame"));
 
-  if (!filePath.isEmpty()) {
-    bool hasBreakpoint =
-        BreakpointManager::instance().hasBreakpoint(filePath, clickedLine);
-    breakpointAction->setCheckable(true);
-    breakpointAction->setChecked(hasBreakpoint);
-  } else {
-    breakpointAction->setEnabled(false);
-  }
+  breakpointAction->setEnabled(!filePath.isEmpty());
 
   MainWindow *mainWindow = m_editor->mainWindow;
   if (mainWindow && !filePath.isEmpty()) {
@@ -558,34 +555,13 @@ void LineNumberArea::contextMenuEvent(QContextMenuEvent *event) {
       return;
     }
     BreakpointManager::instance().toggleBreakpoint(filePath, clickedLine);
-  } else if (selected == conditionAction || selected == logpointAction) {
-    const bool editingLogpoint = selected == logpointAction;
-    bool ok = false;
-    const QString value =
-        QInputDialog::getText(
-            this, editingLogpoint ? tr("Logpoint") : tr("Breakpoint Condition"),
-            editingLogpoint ? tr("Log message (use braces for expressions):")
-                            : tr("Pause when expression is true:"),
-            QLineEdit::Normal,
-            editingLogpoint ? existing.logMessage : existing.condition, &ok)
-            .trimmed();
-    if (!ok) {
-      return;
-    }
-    int breakpointId = existing.id;
-    if (breakpointId <= 0) {
-      if (value.isEmpty()) {
-        return;
-      }
-      breakpointId = BreakpointManager::instance()
-                         .toggleBreakpoint(filePath, clickedLine)
-                         .id;
-    }
-    if (editingLogpoint) {
-      BreakpointManager::instance().setLogMessage(breakpointId, value);
-    } else {
-      BreakpointManager::instance().setCondition(breakpointId, value);
-    }
+  } else if (selected == conditionAction ||
+             (logpointAction && selected == logpointAction)) {
+    BreakpointEditorDialog::editAt(
+        filePath, clickedLine,
+        selected == logpointAction ? BreakpointEditorDialog::Focus::LogMessage
+                                   : BreakpointEditorDialog::Focus::Condition,
+        currentThemeFor(m_editor), this);
   } else if (enableAction && selected == enableAction) {
     BreakpointManager::instance().setEnabled(existing.id, !existing.enabled);
   } else if (selected == blameAction && mainWindow) {

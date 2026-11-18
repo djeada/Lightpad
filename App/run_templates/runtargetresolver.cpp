@@ -61,6 +61,23 @@ bool looksLikeStructuredTestRun(const QString &templateId,
   return ctestCommand.match(commandLine).hasMatch();
 }
 
+// A CMake executable replaces the file's run template, but the arguments,
+// environment and working directory configured for the file still apply.
+void applyAssignmentToExecutable(RunTarget &target) {
+  const FileTemplateAssignment assignment =
+      RunTemplateManager::instance().getAssignmentForFile(target.filePath);
+  target.arguments.clear();
+  for (const QString &argument : assignment.customArgs) {
+    target.arguments << RunTemplateManager::substituteVariables(
+        argument, target.filePath);
+  }
+  if (assignment.workingDirectory.trimmed().isEmpty()) {
+    target.workingDirectory = target.program.isEmpty()
+                                  ? target.cmakeRoot
+                                  : QFileInfo(target.program).absolutePath();
+  }
+}
+
 } // namespace
 
 QString RunTarget::displayName() const {
@@ -318,9 +335,7 @@ RunTarget RunTargetResolver::resolve(const RunTargetContext &context) {
           target.ownedByCMakeTarget = !owner.isEmpty();
           target.program =
               CMakeProject::executablePathFor(*chosen, target.cmakeBinaryDir);
-          target.arguments.clear();
-
-          target.workingDirectory = QFileInfo(target.program).absolutePath();
+          applyAssignmentToExecutable(target);
           return target;
         }
 
@@ -332,8 +347,7 @@ RunTarget RunTargetResolver::resolve(const RunTargetContext &context) {
           target.cmakeBinaryDir = CMakeProject::resolveBinaryDirectory(
               cmakeRoot, context.cmakeBinaryDir);
           target.program.clear();
-          target.arguments.clear();
-          target.workingDirectory = cmakeRoot;
+          applyAssignmentToExecutable(target);
           return target;
         }
       }

@@ -2,6 +2,7 @@
 
 #include "../core/logging/logger.h"
 #include "adapters/builtinadapters.h"
+#include "adapters/genericdebugadapter.h"
 
 #include <QFileInfo>
 
@@ -21,6 +22,11 @@ void DebugAdapterRegistry::registerBuiltinAdapters() {
   registerAdapter(createLldbDebugAdapter());
   registerAdapter(createGoDebugAdapter());
   registerAdapter(createRustDebugAdapter());
+  // Adapters described in debug_adapters.json (built-in, then the user's,
+  // which may replace any adapter by id).
+  for (const auto &adapter : GenericDebugAdapter::loadAll()) {
+    registerAdapter(adapter);
+  }
   LOG_INFO("Registered built-in debug adapters");
 }
 

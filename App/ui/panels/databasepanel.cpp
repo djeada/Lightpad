@@ -1,9 +1,11 @@
 #include "databasepanel.h"
-#include "../tabnavigation.h"
 #include "../paneltypography.h"
+#include "../tabnavigation.h"
 
 #include "../../database/csvimport.h"
 #include "../../database/dbcatalog.h"
+#include "../../database/dbconnectionurl.h"
+#include "../../database/dbprojectdiscovery.h"
 #include "../../database/resultexporter.h"
 #include "../../database/schemadiff.h"
 #include "../../database/sqllint.h"
@@ -107,6 +109,71 @@ public:
                       Qt::AlignRight | Qt::AlignVCenter, shown);
     painter->restore();
   }
+};
+
+// Asks for a connection's password for this session, in the IDE's style.
+class PasswordPrompt : public StyledDialog {
+public:
+  PasswordPrompt(const DbConnectionProfile &profile, const QString &reason,
+                 const Theme &theme, QWidget *parent)
+      : StyledDialog(parent) {
+    setWindowTitle(tr("Connect to %1").arg(profile.name));
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(18, 16, 18, 14);
+    layout->setSpacing(10);
+    auto *title = new QLabel(tr("Password for %1").arg(profile.name), this);
+    layout->addWidget(title);
+    auto *where = new QLabel(profile.summary(), this);
+    where->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(where);
+    QLabel *why = nullptr;
+    if (!reason.isEmpty()) {
+      why = new QLabel(reason, this);
+      why->setWordWrap(true);
+      layout->addWidget(why);
+    }
+    m_password = new QLineEdit(this);
+    m_password->setObjectName("dbPasswordPrompt");
+    m_password->setEchoMode(QLineEdit::Password);
+    m_password->setPlaceholderText(tr("Password"));
+    m_password->setMinimumWidth(320);
+    layout->addWidget(m_password);
+    auto *show = new QCheckBox(tr("Show password"), this);
+    layout->addWidget(show);
+    auto *hint = new QLabel(
+        tr("Kept in memory until Lightpad closes; never written to disk."),
+        this);
+    hint->setWordWrap(true);
+    layout->addWidget(hint);
+    auto *buttons = new QHBoxLayout();
+    buttons->addStretch();
+    auto *cancel = new QPushButton(tr("Cancel"), this);
+    auto *connectButton = new QPushButton(tr("Connect"), this);
+    buttons->addWidget(cancel);
+    buttons->addWidget(connectButton);
+    layout->addLayout(buttons);
+    connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
+    connect(connectButton, &QPushButton::clicked, this, &QDialog::accept);
+    connect(show, &QCheckBox::toggled, this, [this](bool visible) {
+      m_password->setEchoMode(visible ? QLineEdit::Normal
+                                      : QLineEdit::Password);
+    });
+    applyTheme(theme);
+    styleTitleLabel(title);
+    styleSubduedLabel(where);
+    styleSubduedLabel(hint);
+    if (why) {
+      styleToneLabel(why, UIStyleHelper::Tone::Warning);
+    }
+    stylePrimaryButton(connectButton);
+    setKeyboardDefault(connectButton);
+    m_password->setFocus();
+  }
+
+  QString password() const { return m_password->text(); }
+
+private:
+  QLineEdit *m_password = nullptr;
 };
 
 } // namespace
@@ -275,7 +342,9 @@ void DatabasePanel::buildUi() {
   m_resultTabs->setDocumentMode(true);
   m_resultTabs->setMovable(true);
   TabNavigation::install(m_resultTabs, this);
-  m_resultTabs->tabBar()->setToolTip(tr("Drag to reorder · Ctrl+PageUp/PageDown to switch · Ctrl+Shift+PageUp/PageDown to move"));
+  m_resultTabs->tabBar()->setToolTip(
+      tr("Drag to reorder · Ctrl+PageUp/PageDown to switch · "
+         "Ctrl+Shift+PageUp/PageDown to move"));
   m_resultTabs->setElideMode(Qt::ElideRight);
   m_resultTabs->setUsesScrollButtons(true);
   m_resultStack->addWidget(m_resultsEmpty);
@@ -607,7 +676,8 @@ void DatabasePanel::applyTheme(const Theme &theme) {
           "none; padding: 6px 10px; }"
           "QLabel#dbResultsEmpty { color: %9; background: %1; }"
           "QWidget#dbStatusBar { background: %2; border-top: 1px solid %3; }"
-          "QLabel#dbStatus, QLabel#dbRunning, QLabel#dbConsoleHint { color: %9; }"
+          "QLabel#dbStatus, QLabel#dbRunning, QLabel#dbConsoleHint { color: "
+          "%9; }"
           "QProgressBar#dbProgress { background: %2; border: none; }"
           "QProgressBar#dbProgress::chunk { background: %7; }"
           "QScrollBar:vertical { background: transparent; width: 10px; }"
@@ -803,11 +873,31 @@ void DatabasePanel::onSchemaChanged(const QString &id) {
   refreshCombos();
 }
 
-void DatabasePanel::newConnection() {
+void DatabasePanel::setWorkspaceFolder(const QString &folder) {
+  if (folder == m_workspaceFolder) {
+    return;
+  }
+  m_workspaceFolder = folder;
+  m_projectDatabaseCount = -1;
+  DbProjectDiscovery::setWorkspaceFolder(folder);
+  if (m_manager->connections().isEmpty()) {
+    rebuildTree();
+  }
+}
+
+void DatabasePanel::newConnection() { newConnectionFrom(QString()); }
+
+void DatabasePanel::newConnectionFrom(const QString &templateIdOrUrl) {
   ConnectionDialog dlg(this);
   dlg.applyTheme(m_theme);
+  dlg.setWorkspaceFolder(m_workspaceFolder);
+  dlg.setSavedProfiles(m_manager->profiles());
   dlg.setNameSuggestionProvider(
       [this](const QString &n) { return m_manager->uniqueName(n); });
+  if (!templateIdOrUrl.isEmpty() && !dlg.startFromTemplate(templateIdOrUrl) &&
+      dlg.applyConnectionString(templateIdOrUrl)) {
+    dlg.setProfile(dlg.profile());
+  }
   if (dlg.exec() != QDialog::Accepted) {
     return;
   }
@@ -829,6 +919,7 @@ void DatabasePanel::editConnection(const QString &id) {
   }
   ConnectionDialog dlg(this);
   dlg.applyTheme(m_theme);
+  dlg.setWorkspaceFolder(m_workspaceFolder);
   dlg.setNameSuggestionProvider(
       [this, id](const QString &n) { return m_manager->uniqueName(n, id); });
   dlg.setProfile(c->profile());
@@ -878,23 +969,25 @@ bool DatabasePanel::ensurePassword(DbConnection *conn) {
     return false;
   }
   if (conn->isConnected() || conn->state() == DbConnectionState::Connecting ||
-      conn->profile().engine == DbEngine::Sqlite ||
-      conn->hasSessionPassword()) {
+      conn->hasSessionPassword() || conn->resolvePassword()) {
     return true;
   }
-  bool ok = false;
-  const QString who =
-      conn->profile().user.isEmpty()
-          ? conn->profile().name
-          : conn->profile().user + QLatin1Char('@') + conn->profile().name;
-  const QString pw = QInputDialog::getText(
-      this, tr("Connect to %1").arg(conn->profile().name),
-      tr("Password for %1\n(kept in memory for this session only):").arg(who),
-      QLineEdit::Password, QString(), &ok);
-  if (!ok) {
+  const DbConnectionProfile &profile = conn->profile();
+  QString reason;
+  if (profile.passwordSource == DbPasswordSource::Environment) {
+    reason = tr("%1 is not set in Lightpad's environment or the project's "
+                ".env file.")
+                 .arg(profile.passwordEnv);
+  } else if (conn->state() == DbConnectionState::Failed &&
+             !conn->lastError().isEmpty()) {
+    reason = conn->lastError().section('\n', 0, 0);
+  }
+  PasswordPrompt prompt(profile, reason, m_theme, this);
+  PanelTypography::apply(&prompt, PanelTypography::contentFont(this));
+  if (prompt.exec() != QDialog::Accepted) {
     return false;
   }
-  conn->rememberPassword(pw);
+  conn->rememberPassword(prompt.password());
   return true;
 }
 
@@ -1268,13 +1361,23 @@ void DatabasePanel::rebuildTree() {
       m_theme, m_theme.backgroundColor, m_theme.foregroundColor);
   const auto conns = m_manager->connections();
   if (conns.isEmpty()) {
+    if (m_projectDatabaseCount < 0) {
+      m_projectDatabaseCount =
+          int(DbProjectDiscovery::scan(m_workspaceFolder).size());
+    }
     auto *empty = new QTreeWidgetItem(m_tree);
     empty->setText(0, tr("No connections yet"));
     empty->setForeground(0, muted);
     empty->setData(0, RoleKind, KindHint);
     auto *add = new QTreeWidgetItem(m_tree);
-    add->setText(0, tr("Add a connection to get started"));
-    add->setForeground(0, muted);
+    add->setText(0, m_projectDatabaseCount > 0
+                        ? tr("%n database(s) found in this project — "
+                             "double-click to add",
+                             nullptr, m_projectDatabaseCount)
+                        : tr("Double-click to add a connection"));
+    add->setToolTip(0, tr("Opens the new connection dialog with templates "
+                          "for local, Docker and cloud databases"));
+    add->setForeground(0, m_projectDatabaseCount > 0 ? text : muted);
     add->setData(0, RoleKind, KindHint);
   }
   for (DbConnection *conn : conns) {
@@ -1349,6 +1452,11 @@ void DatabasePanel::onTreeDoubleClicked(QTreeWidgetItem *item, int) {
     return;
   }
   DbConnection *conn = connectionFromItem(item);
+  if (item->data(0, RoleKind).toInt() == KindHint && !conn &&
+      m_manager->connections().isEmpty()) {
+    newConnection();
+    return;
+  }
   switch (item->data(0, RoleKind).toInt()) {
   case KindConnection:
     if (conn->isConnected())
@@ -1449,8 +1557,10 @@ void DatabasePanel::onTreeContextMenu(const QPoint &pos) {
     menu.addAction(tr("Edit…"), this, [this, id]() { editConnection(id); });
     menu.addAction(tr("Duplicate"), this,
                    [this, id]() { duplicateConnection(id); });
-    menu.addAction(tr("Copy connection summary"), this, [conn]() {
-      QApplication::clipboard()->setText(conn->profile().summary());
+    menu.addAction(tr("Copy connection URL"), this, [conn]() {
+      const QString url = DbConnectionUrl::format(conn->profile());
+      QApplication::clipboard()->setText(
+          url.isEmpty() ? conn->profile().summary() : url);
     });
     menu.addSeparator();
     menu.addAction(tr("Remove…"), this, [this, id]() { removeConnection(id); });

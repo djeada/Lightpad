@@ -18,13 +18,22 @@ struct RunTemplate {
   QString language;
   QString languageId;
   QStringList extensions;
+  // Extensions for which this template wins over the language's first
+  // template (C files share the "cpp" language with C++).
+  QStringList defaultFor;
   QString command;
   QStringList args;
   QString workingDirectory;
   QStringList projectMarkers;
   QMap<QString, QString> env;
+  // How Debug starts a file run by this template: a launch.json style object
+  // ("type", "program", "module", ...) plus an optional "build" command line
+  // that produces a debuggable program. Empty when the template has no
+  // debugger recipe.
+  QJsonObject debug;
 
   bool isValid() const { return !id.isEmpty() && !command.isEmpty(); }
+  bool isDebuggable() const { return !debug.isEmpty(); }
 };
 
 struct FileTemplateAssignment {
@@ -41,6 +50,16 @@ struct FileTemplateAssignment {
   QString pythonInterpreter;
   QString pythonVenvPath;
   QString pythonRequirementsFile;
+
+  // True when nothing differs from the automatic defaults.
+  bool isEmpty() const {
+    return templateId.isEmpty() && customArgs.isEmpty() &&
+           customEnv.isEmpty() && sourceFiles.isEmpty() &&
+           workingDirectory.isEmpty() && compilerFlags.isEmpty() &&
+           preRunCommand.isEmpty() && postRunCommand.isEmpty() &&
+           pythonMode.isEmpty() && pythonInterpreter.isEmpty() &&
+           pythonVenvPath.isEmpty() && pythonRequirementsFile.isEmpty();
+  }
 };
 
 class RunTemplateManager : public QObject {
@@ -85,6 +104,25 @@ public:
   effectiveTemplateIdForFile(const QString &filePath,
                              const QString &languageId = QString()) const;
 
+  // The template Run picks for the file when none is assigned.
+  QString
+  automaticTemplateIdForFile(const QString &filePath,
+                             const QString &languageId = QString()) const {
+    return resolveTemplateIdForFile(filePath, languageId);
+  }
+
+  // While alive, getAssignmentForFile(filePath) returns the given assignment
+  // instead of the saved one, so a configuration dialog can preview exactly
+  // what Run and Debug would do with unsaved edits.
+  class AssignmentPreview {
+  public:
+    AssignmentPreview(const QString &filePath,
+                      const FileTemplateAssignment &assignment);
+    ~AssignmentPreview();
+    AssignmentPreview(const AssignmentPreview &) = delete;
+    AssignmentPreview &operator=(const AssignmentPreview &) = delete;
+  };
+
   static QString substituteVariables(const QString &input,
                                      const QString &filePath);
   static QString substituteCommandLineVariables(const QString &input,
@@ -117,6 +155,9 @@ private:
   mutable QMap<QString, FileTemplateAssignment> m_assignments;
   mutable bool m_assignmentsLoaded = false;
   QString m_workspaceFolder;
+  bool m_previewActive = false;
+  QString m_previewFilePath;
+  FileTemplateAssignment m_previewAssignment;
 };
 
 #endif

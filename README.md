@@ -20,10 +20,11 @@ Lightpad is a Qt 6-based code editor with a modern UI, built-in language tooling
 - Recovery drafts for unsaved and untitled documents, with preview and selective restoration
 - Multi-cursor editing and split editors (horizontal/vertical)
 - Problems panel, breadcrumbs, minimap, and integrated terminal
-- Run and format templates with per-project assignments
+- Run and Debug from one launch target: the current file (resolved automatically, with per-file arguments, environment and build flags) or saved launch.json configurations and compounds, created from 39 templates for Python, Node.js/TypeScript, C/C++, Rust, Go, Java, .NET, Dart/Flutter, OCaml and tools, with debuggers that can be added as plain JSON ([Run and Debug](docs/RUN_AND_DEBUG.md))
+- Format templates with per-project assignments
 - Project-aware Cargo, Go package, and npm runs, with Rust/Go checks and Node.js language tooling
 - FastAPI/Flask backend detection, shared Python environments, project database discovery, and pytest endpoint debugging
-- Database workbench: SQLite, SQL Server, PostgreSQL and MySQL/MariaDB (also inside Docker containers) with multiple connections, schema browser, result grids, exports, column insights and schema-aware SQL completion
+- Database workbench: SQLite, SQL Server, PostgreSQL and MySQL/MariaDB (also inside Docker containers) with connection templates for local and cloud databases, pasted connection URLs, project `.env`/compose detection, multiple connections, schema browser, result grids, exports, column insights and schema-aware SQL completion
 - Image viewer and optional PDF viewer (Qt6Pdf)
 
 ## Supported languages (built-in syntax plugins)
@@ -91,11 +92,11 @@ LIGHTPAD_LOG_LEVEL=debug ./build/App/Lightpad
 
 ## Project configuration
 Lightpad stores project-specific settings in a `.lightpad/` directory at the project root:
-- `run_config.json` for run template assignments
+- `run_config.json` for per-file run settings (template, arguments, environment, ...)
 - `format_config.json` for formatter assignments
 - `highlight_config.json` for language overrides
 - `backend.json` for optional Python web application settings and project tasks
-- `debug/launch.json`, `debug/breakpoints.json`, `debug/watches.json`
+- `debug/launch.json` for saved run and debug configurations (VS Code format), plus `debug/breakpoints.json` and `debug/watches.json`
 
 User settings are stored in:
 - Linux: `~/.config/lightpad/settings.json` (fallback: `~/.config/lightpad/`)

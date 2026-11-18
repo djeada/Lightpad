@@ -165,10 +165,69 @@ bool engineForImage(const QString &image, DbEngine *engine) {
   return matched;
 }
 
+QList<QPair<QString, QString>> sslModes(DbEngine engine) {
+  if (!supportsSslMode(engine)) {
+    return {};
+  }
+  return {{QString(), QStringLiteral("Client default")},
+          {QStringLiteral("disable"), QStringLiteral("Off")},
+          {QStringLiteral("prefer"),
+           QStringLiteral("Prefer (use TLS when the server offers it)")},
+          {QStringLiteral("require"), QStringLiteral("Require TLS")},
+          {QStringLiteral("verify-ca"),
+           QStringLiteral("Require TLS and verify the certificate")},
+          {QStringLiteral("verify-full"),
+           QStringLiteral("Require TLS and verify certificate and host")}};
+}
+
+bool supportsSslMode(DbEngine engine) {
+  return engine == DbEngine::PostgreSql || engine == DbEngine::MySql;
+}
+
+QString normalizedSslMode(const QString &mode) {
+  const QString key = mode.trimmed().toLower().replace('_', '-');
+  if (key.isEmpty() || key == "default") {
+    return {};
+  }
+  if (key == "disable" || key == "disabled" || key == "off" || key == "false" ||
+      key == "0" || key == "none" || key == "no") {
+    return QStringLiteral("disable");
+  }
+  if (key == "allow" || key == "prefer" || key == "preferred" ||
+      key == "optional") {
+    return QStringLiteral("prefer");
+  }
+  if (key == "require" || key == "required" || key == "true" || key == "1" ||
+      key == "on" || key == "yes" || key == "mandatory" ||
+      key == "skip-verify") {
+    return QStringLiteral("require");
+  }
+  if (key == "verify-ca") {
+    return QStringLiteral("verify-ca");
+  }
+  if (key == "verify-full" || key == "verify-identity" || key == "strict" ||
+      key == "verify") {
+    return QStringLiteral("verify-full");
+  }
+  return {};
+}
+
+QString sslModeLabel(const QString &mode) {
+  for (const auto &entry : sslModes(DbEngine::PostgreSql)) {
+    if (entry.first == mode) {
+      return entry.second;
+    }
+  }
+  return mode;
+}
+
 } // namespace DbEngineInfo
 
 QString DbConnectionProfile::summary() const {
   if (engine == DbEngine::Sqlite) {
+    if (filePath == QLatin1String(":memory:")) {
+      return QStringLiteral("in-memory database");
+    }
     return filePath.isEmpty() ? QStringLiteral("SQLite (unsaved)")
                               : QFileInfo(filePath).fileName();
   }
@@ -212,7 +271,22 @@ bool DbConnectionProfile::isValid(QString *reason) const {
   if (port < 0 || port > 65535) {
     return fail(QStringLiteral("The port must be between 1 and 65535."));
   }
+  if (passwordSource == DbPasswordSource::Environment &&
+      passwordEnv.trimmed().isEmpty()) {
+    return fail(QStringLiteral(
+        "Name the environment variable that holds the password."));
+  }
   return true;
+}
+
+bool DbConnectionProfile::sameTargetAs(const DbConnectionProfile &o) const {
+  return engine == o.engine && transport == o.transport && host == o.host &&
+         port == o.port && user == o.user && container == o.container &&
+         filePath == o.filePath && clientPath == o.clientPath &&
+         extraArgs == o.extraArgs && readOnly == o.readOnly &&
+         sslMode == o.sslMode && passwordSource == o.passwordSource &&
+         passwordEnv == o.passwordEnv &&
+         trustServerCertificate == o.trustServerCertificate;
 }
 
 QJsonObject DbConnectionProfile::toJson() const {
@@ -231,6 +305,17 @@ QJsonObject DbConnectionProfile::toJson() const {
   obj["container"] = container;
   obj["clientPath"] = clientPath;
   obj["extraArgs"] = extraArgs;
+  if (!sslMode.isEmpty()) {
+    obj["sslMode"] = sslMode;
+  }
+  if (passwordSource != DbPasswordSource::Ask) {
+    obj["passwordSource"] = passwordSource == DbPasswordSource::None
+                                ? QStringLiteral("none")
+                                : QStringLiteral("env");
+  }
+  if (!passwordEnv.isEmpty()) {
+    obj["passwordEnv"] = passwordEnv;
+  }
   obj["trustServerCertificate"] = trustServerCertificate;
   obj["readOnly"] = readOnly;
   obj["confirmDestructive"] = confirmDestructive;
@@ -254,6 +339,13 @@ DbConnectionProfile DbConnectionProfile::fromJson(const QJsonObject &obj) {
   p.container = obj.value("container").toString();
   p.clientPath = obj.value("clientPath").toString();
   p.extraArgs = obj.value("extraArgs").toString();
+  p.sslMode = DbEngineInfo::normalizedSslMode(obj.value("sslMode").toString());
+  const QString source = obj.value("passwordSource").toString();
+  p.passwordSource = source == QLatin1String("none") ? DbPasswordSource::None
+                     : source == QLatin1String("env")
+                         ? DbPasswordSource::Environment
+                         : DbPasswordSource::Ask;
+  p.passwordEnv = obj.value("passwordEnv").toString();
   p.trustServerCertificate = obj.value("trustServerCertificate").toBool(true);
   p.readOnly = obj.value("readOnly").toBool(false);
   p.confirmDestructive = obj.value("confirmDestructive").toBool(true);

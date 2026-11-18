@@ -85,7 +85,6 @@
 #include "dialogs/cmaketargetpickerdialog.h"
 #include "dialogs/commandpalette.h"
 #include "dialogs/compareanythingdialog.h"
-#include "dialogs/debugconfigurationdialog.h"
 #include "dialogs/filequickopen.h"
 #include "dialogs/filetimelinedialog.h"
 #include "dialogs/formattemplateselector.h"
@@ -101,6 +100,7 @@
 #include "uistylehelper.h"
 
 #include "../build/cmakeproject.h"
+#include "../database/dbprojectdiscovery.h"
 #include "../diagnostics/compilerdiagnosticparser.h"
 #include "../filetree/filedirtreemodel.h"
 #include "../run_templates/runtargetresolver.h"
@@ -108,11 +108,10 @@
 #include "dialogs/gotolinedialog.h"
 #include "dialogs/gotosymboldialog.h"
 #include "dialogs/languageserverstatusdialog.h"
+#include "dialogs/launchconfigurationsdialog.h"
 #include "dialogs/preferences.h"
 #include "dialogs/pythonenvironmentdialog.h"
 #include "dialogs/recentfilesdialog.h"
-#include "dialogs/runconfigurations.h"
-#include "dialogs/runtemplateselector.h"
 #include "dialogs/shortcuts.h"
 #include "dialogs/testconfigurationdialog.h"
 #include "dialogs/themedmessagebox.h"
@@ -169,8 +168,6 @@ QString statusBarTextButtonStyle() {
                  "}")
       .arg(tc.textSecondary.name(), tc.textPrimary.name());
 }
-
-constexpr auto kCompoundDebugTargetPrefix = "compound:";
 
 struct ExternalTerminalLaunch {
   QString program;

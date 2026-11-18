@@ -2,7 +2,9 @@
 #define DBTYPES_H
 
 #include <QJsonObject>
+#include <QList>
 #include <QMetaType>
+#include <QPair>
 #include <QString>
 #include <QStringList>
 #include <QVariant>
@@ -11,6 +13,10 @@
 enum class DbEngine { Sqlite, PostgreSql, MySql, SqlServer };
 
 enum class DbTransport { Direct, Docker };
+
+// Where the password for a server connection comes from. Passwords typed by
+// the user are never written to disk.
+enum class DbPasswordSource { Ask, None, Environment };
 
 namespace DbEngineInfo {
 
@@ -27,6 +33,13 @@ QVector<DbEngine> allEngines();
 
 bool engineForImage(const QString &image, DbEngine *engine);
 
+// Encryption choices for the engine as (id, label) pairs. The ids are libpq's
+// sslmode names; an empty id means "use the client's default".
+QList<QPair<QString, QString>> sslModes(DbEngine engine);
+bool supportsSslMode(DbEngine engine);
+QString sslModeLabel(const QString &mode);
+QString normalizedSslMode(const QString &mode);
+
 } // namespace DbEngineInfo
 
 struct DbConnectionProfile {
@@ -42,6 +55,13 @@ struct DbConnectionProfile {
   QString container;
   QString clientPath;
   QString extraArgs;
+  // libpq sslmode names (disable, prefer, require, verify-ca, verify-full),
+  // translated for psql and mysql/mariadb. Empty uses the client's default.
+  QString sslMode;
+  DbPasswordSource passwordSource = DbPasswordSource::Ask;
+  // Environment variable holding the password when passwordSource is
+  // Environment; Lightpad's environment wins over the project's .env files.
+  QString passwordEnv;
   bool trustServerCertificate = true;
   bool readOnly = false;
   bool confirmDestructive = true;
@@ -52,6 +72,12 @@ struct DbConnectionProfile {
   }
   QString summary() const;
   bool isValid(QString *reason = nullptr) const;
+  bool needsPassword() const {
+    return engine != DbEngine::Sqlite &&
+           passwordSource != DbPasswordSource::None;
+  }
+  // True when changing from `other` to this profile needs a new session.
+  bool sameTargetAs(const DbConnectionProfile &other) const;
 
   QJsonObject toJson() const;
   static DbConnectionProfile fromJson(const QJsonObject &obj);

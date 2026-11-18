@@ -14,6 +14,7 @@
 
 #include "../core/io/fileopenguard.h"
 #include "../filetree/projectsearch.h"
+#include "../run_templates/launchplanner.h"
 #include "../run_templates/runtargetresolver.h"
 #include "../settings/textareasettings.h"
 #include "../settings/theme.h"
@@ -56,7 +57,6 @@ class LspCompletionProvider;
 class NotificationManager;
 class MarkdownPreviewPanel;
 class LatexPreviewPanel;
-struct DebugConfiguration;
 struct TestConfiguration;
 struct PythonBackendProject;
 struct DefinitionTarget;
@@ -369,8 +369,6 @@ private:
   QMetaObject::Connection m_sessionTerminatedConnection;
   QMetaObject::Connection m_sessionErrorConnection;
   QMetaObject::Connection m_sessionStateConnection;
-  QMetaObject::Connection m_runProcessFinishedConnection;
-  QMetaObject::Connection m_runProcessErrorConnection;
   QMetaObject::Connection m_markdownPreviewTextConnection;
   QMetaObject::Connection m_formatProcessFinishedConnection;
   QMetaObject::Connection m_formatProcessErrorConnection;
@@ -493,6 +491,8 @@ private:
                          const PythonBackendProject &project);
   QPointer<Terminal> m_backendTerminal;
   QString m_backendTerminalRoot;
+  // Terminal tabs owned by saved configurations, reused when they run again.
+  QHash<QString, QPointer<Terminal>> m_launchTerminals;
   void ensureDatabasePanel();
   void showDatabasePanel(bool focusConsole = false);
   void toggleDatabasePanel();
@@ -505,8 +505,6 @@ private:
   void trackDockLayoutChanges(QDockWidget *dock);
   void tabifyBottomDock(QDockWidget *dock);
   void polishDockTabBars();
-  QString activeDebugTarget() const;
-  void setActiveDebugTarget(const QString &target);
   void syncViewToggleActionStates();
   bool isCurrentMinimapVisible() const;
   void ensureStatusLabels();
@@ -535,12 +533,48 @@ private:
   void rebuildTestTargetMenu();
   void refreshTestTargetButton();
   QString selectedTestConfigurationId() const;
-  void rebuildDebugTargetMenu();
-  void refreshDebugTargetButton();
-  void rebuildRunTargetMenu();
-  void refreshRunTargetButton();
+
+  // Launching (mainwindow_launch.cpp). Run and Debug share one target: the
+  // current file or a saved configuration/compound from launch.json.
+  struct TerminalLaunch {
+    QString title;
+    QString program;
+    QStringList arguments;
+    QString workingDirectory;
+    QMap<QString, QString> environment;
+    // Shell command lines run before (must succeed) and after the program.
+    QString before;
+    QString after;
+  };
+  struct DebugLaunchRequest {
+    QString title;
+    DebugConfiguration configuration;
+    QList<LaunchBuildStep> buildSteps;
+    bool cmakeBuild = false;
+    QString cmakeSourceFile;
+    QString cmakeBinaryDir;
+  };
+
+  LaunchTarget activeLaunchTarget() const;
+  void setActiveLaunchTarget(const LaunchTarget &target);
+  void launchActiveTarget(LaunchMode mode);
+  void launchTarget(const LaunchTarget &target, LaunchMode mode);
+  void refreshLaunchButtons();
+  void populateLaunchMenu(QMenu *menu);
   void addCMakeTargetActions(QMenu *menu, const QString &filePath);
   void addRunTemplateActions(QMenu *menu, const QString &filePath);
+  void openLaunchConfigurations(const QString &filePath,
+                                const LaunchTarget &selection);
+  void addLaunchConfigurationFromTemplate(const QString &templateId);
+  void showLaunchProblem(const QString &title, const QString &text,
+                         const QString &details, const LaunchTarget &configure,
+                         const QString &configureFile);
+  void saveModifiedFilesBeforeLaunch();
+  void prepareLaunchWorkspace(const QString &filePath);
+  Terminal *launchTerminal(const QString &title,
+                           const QString &workingDirectory, bool dedicated);
+  void startTerminalLaunch(Terminal *terminal, const TerminalLaunch &launch);
+  void stopFollowingLaunches();
 
   RunTarget resolveRunTargetForFile(const QString &filePath);
   void invalidateRunTargetCache();
@@ -548,21 +582,12 @@ private:
   void runPath(const QString &filePath);
   void executeRunTarget(const RunTarget &target);
   void runStructuredTestTarget(const RunTarget &target);
+  void runConfiguration(const QString &name);
+  void launchCompound(const QString &name, LaunchMode mode);
   void setPreferredCMakeTarget(const QString &targetName);
 
   QString effectivePreferredCMakeTarget() const;
   QString activeEditorFilePath() const;
-  void announceRunTarget(const RunTarget &target);
-  QString selectedDebugConfigurationName() const;
-  QString selectedCompoundDebugConfigurationName() const;
-  bool prepareDebugConfigurationForStart(const DebugConfiguration &config,
-                                         const QString &currentFilePath,
-                                         DebugConfiguration *resolvedConfig,
-                                         QString *errorMessage);
-  bool runPreLaunchTask(const QString &taskCommand, QString *errorMessage);
-  bool buildCMakeDebugTarget(DebugConfiguration *resolvedConfig,
-                             const QString &currentFilePath,
-                             QString *errorMessage);
   QString cmakeRootForSource(const QString &filePath) const;
 
   bool buildCMakeExecutableForSource(const QString &filePath,
@@ -581,8 +606,12 @@ private:
                                    const QStringList &command,
                                    const QString &workingDirectory,
                                    QString *output, QString *errorMessage);
-  bool startDebugConfigurationByName(const QString &configurationName);
-  bool startCompoundDebugConfigurationByName(const QString &compoundName);
+  bool debugConfiguration(const QString &name);
+  bool debugRequestForConfiguration(const DebugConfiguration &config,
+                                    const QString &currentFile,
+                                    DebugLaunchRequest *request);
+  bool prepareDebugLaunch(DebugLaunchRequest *request);
+  QString startPreparedDebugSession(const DebugConfiguration &config);
   void startDebuggingForCurrentFile();
   void startDebuggingForFile(const QString &filePath);
   void startDebuggingTests(const QStringList &targets,
@@ -590,13 +619,6 @@ private:
   void updateRunAndDebugActionLabels(const QString &fileName);
   void refreshRunAndDebugActionLabels();
 
-  bool prepareDebugTargetForFile(const QString &filePath,
-                                 const QString &languageId,
-                                 QString *resolvedProgram,
-                                 QString *errorMessage);
-  bool compileSourceForDebug(const QString &filePath, const QString &languageId,
-                             const QString &outputPath,
-                             QString *errorMessage) const;
   void attachDebugSession(const QString &sessionId);
   void hookInferiorTerminal(DebugSession *session);
   void registerDebugTerminal(const QString &sessionId, Terminal *terminal);

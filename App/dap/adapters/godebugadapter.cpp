@@ -41,6 +41,34 @@ public:
     return config;
   }
 
+  RunCommand
+  runCommand(const DebugConfiguration &configuration) const override {
+    RunCommand command = AbstractDebugAdapter::runCommand(configuration);
+    if (configuration.request.compare("attach", Qt::CaseInsensitive) == 0) {
+      return command;
+    }
+    const QString mode =
+        configuration.adapterConfig.value("mode").toString("debug");
+    if (mode == QLatin1String("exec")) {
+      return command;
+    }
+    command.error.clear();
+    const QString target = configuration.program.isEmpty()
+                               ? QStringLiteral(".")
+                               : configuration.program;
+    command.program = QStringLiteral("go");
+    command.arguments = mode == QLatin1String("test")
+                            ? QStringList{QStringLiteral("test"), target}
+                            : QStringList{QStringLiteral("run"), target};
+    if (!configuration.args.isEmpty()) {
+      if (mode == QLatin1String("test")) {
+        command.arguments << QStringLiteral("-args");
+      }
+      command.arguments << configuration.args;
+    }
+    return command;
+  }
+
   QJsonObject createAttachConfig(int processId, const QString &host,
                                  int port) const override {
     QJsonObject config;

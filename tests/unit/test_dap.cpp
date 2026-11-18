@@ -1,15 +1,26 @@
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDialog>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QHeaderView>
 #include <QHostAddress>
 #include <QJsonDocument>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QPlainTextEdit>
 #include <QProcess>
+#include <QPushButton>
 #include <QScrollBar>
 #include <QSignalSpy>
+#include <QSpinBox>
 #include <QSplitter>
+#include <QTableWidget>
 #include <QTcpSocket>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QtTest/QtTest>
 
 #include <QCoreApplication>
@@ -24,7 +35,6 @@
 #include "dap/expressiontranslator.h"
 #include "dap/watchmanager.h"
 #include "test_templates/testconfiguration.h"
-#include "ui/dialogs/debugconfigurationdialog.h"
 #include "ui/dockutils.h"
 #include "ui/panels/debugconcurrencypanel.h"
 #include "ui/panels/debugpanel.h"
@@ -170,9 +180,6 @@ private slots:
   void testPreferredAdapterPrefersLanguageSpecific();
   void testCommandLineArgumentsRoundTrip();
   void testConfigurationRenameRefusesExistingName();
-  void testDebugConfigurationDialogValidationAndCancel();
-  void testDebugConfigurationDialogSavesSelectedArguments();
-  void testDebugConfigurationDialogDebouncesStatusProbe();
   void testNestedValueFormatting();
   void testNativeScalarFormats();
   void testNativeCollections_data();
@@ -1596,7 +1603,8 @@ void TestDap::testDebugSettingsInitialization() {
   QDir dir(settings.debugSettingsDir());
   QVERIFY(dir.exists());
 
-  QVERIFY(QFile::exists(settings.launchConfigPath()));
+  // launch.json appears only when the user saves a configuration.
+  QVERIFY(!QFile::exists(settings.launchConfigPath()));
   QVERIFY(QFile::exists(settings.breakpointsConfigPath()));
   QVERIFY(QFile::exists(settings.watchesConfigPath()));
   QVERIFY(QFile::exists(settings.adaptersConfigPath()));
@@ -1623,11 +1631,7 @@ void TestDap::testDebugSettingsFilePaths() {
   QCOMPARE(settings.settingsConfigPath(),
            workspaceFolder + "/.lightpad/debug/settings.json");
 
-  QFile launchFile(settings.launchConfigPath());
-  QVERIFY(launchFile.open(QIODevice::ReadOnly));
-  QJsonDocument launchDoc = QJsonDocument::fromJson(launchFile.readAll());
-  QVERIFY(!launchDoc.isNull());
-  QVERIFY(launchDoc.object().contains("configurations"));
+  QVERIFY(!QFile::exists(settings.launchConfigPath()));
 
   QFile adaptersFile(settings.adaptersConfigPath());
   QVERIFY(adaptersFile.open(QIODevice::ReadOnly));
@@ -1651,6 +1655,9 @@ void TestDap::testDebugConfigurationFileOpenPath() {
 
   QString launchPath = manager.lightpadLaunchConfigPath();
   QCOMPARE(launchPath, settings.launchConfigPath());
+  QVERIFY(!QFile::exists(launchPath));
+  QVERIFY(manager.allConfigurations().isEmpty());
+  QVERIFY(manager.saveToLightpadDir());
   QVERIFY(QFile::exists(launchPath));
 }
 
@@ -2490,129 +2497,6 @@ void TestDap::testConfigurationRenameRefusesExistingName() {
   QVERIFY(!manager.updateConfiguration(a.name, renamed));
   QCOMPARE(manager.configuration(b.name).program, QString("/b"));
   QCOMPARE(manager.configuration(a.name).program, QString("/a"));
-
-  manager.replaceConfigurations(original);
-}
-
-void TestDap::testDebugConfigurationDialogValidationAndCancel() {
-  DebugConfigurationManager &manager = DebugConfigurationManager::instance();
-  const QList<DebugConfiguration> original = manager.allConfigurations();
-
-  DebugConfiguration a;
-  a.name = "Dialog Test A";
-  a.type = "cppdbg";
-  a.request = "launch";
-  a.program = "/a";
-  a.args = {"one arg", "two"};
-  a.adapterConfig["MIMode"] = "gdb";
-  DebugConfiguration b;
-  b.name = "Dialog Test B";
-  b.type = "cppdbg";
-  b.request = "launch";
-  b.program = "/b";
-  manager.replaceConfigurations({a, b});
-
-  {
-    DebugConfigurationDialog dialog;
-    QCOMPARE(dialog.m_currentConfigName, a.name);
-    QCOMPARE(dialog.m_argsEdit->text(), QString("\"one arg\" two"));
-
-    dialog.m_configList->setCurrentRow(1);
-    dialog.m_configList->setCurrentRow(0);
-    QCOMPARE(manager.configuration(a.name).args, a.args);
-
-    dialog.m_adapterConfigEdit->setPlainText("{ not json");
-    dialog.m_configList->setCurrentRow(1);
-    QCOMPARE(dialog.m_configList->currentRow(), 0);
-    QVERIFY(!dialog.m_validationLabel->isHidden());
-    QVERIFY(!dialog.saveCurrentToModel());
-    QCOMPARE(manager.configuration(a.name).adapterConfig.value("MIMode"),
-             QJsonValue("gdb"));
-
-    dialog.m_adapterConfigEdit->setPlainText("{\"MIMode\": \"lldb\"}");
-    dialog.m_nameEdit->setText(b.name);
-    QVERIFY(!dialog.saveCurrentToModel());
-    QCOMPARE(manager.configuration(b.name).program, QString("/b"));
-
-    dialog.m_nameEdit->setText("Dialog Test Renamed");
-    QVERIFY(dialog.saveCurrentToModel());
-    QVERIFY(dialog.m_validationLabel->isHidden());
-    QCOMPARE(manager.configuration("Dialog Test Renamed").program,
-             QString("/a"));
-
-    dialog.reject();
-  }
-
-  QCOMPARE(manager.allConfigurations().size(), 2);
-  QCOMPARE(manager.configuration(a.name).program, QString("/a"));
-  QCOMPARE(manager.configuration(a.name).adapterConfig.value("MIMode"),
-           QJsonValue("gdb"));
-  QVERIFY(manager.configuration("Dialog Test Renamed").name.isEmpty());
-
-  manager.replaceConfigurations(original);
-}
-
-void TestDap::testDebugConfigurationDialogSavesSelectedArguments() {
-  DebugConfigurationManager &manager = DebugConfigurationManager::instance();
-  const QList<DebugConfiguration> original = manager.allConfigurations();
-  const QString originalWorkspace = manager.workspaceFolder();
-  auto restore = qScopeGuard([&]() {
-    manager.replaceConfigurations(original);
-    manager.setWorkspaceFolder(originalWorkspace);
-  });
-  QTemporaryDir dir;
-  QVERIFY(dir.isValid());
-  manager.setWorkspaceFolder(dir.path());
-
-  DebugConfiguration a;
-  a.name = "A: Other Program";
-  a.type = "cppdbg";
-  a.program = "/other";
-  DebugConfiguration b = a;
-  b.name = "B: GDB Launch";
-  b.adapterId = "cppdbg-gdb";
-  b.request = "launch";
-  b.program = "${workspaceFolder}/vulnerable";
-  manager.replaceConfigurations({a, b});
-
-  DebugConfigurationDialog dialog;
-  dialog.m_configList->setCurrentRow(1);
-  dialog.m_argsEdit->setText("AAAA \"two words\"");
-  QSignalSpy accepted(&dialog, &QDialog::accepted);
-  dialog.onSave();
-  QCOMPARE(accepted.count(), 1);
-  QCOMPARE(dialog.selectedConfigurationName(), b.name);
-
-  manager.replaceConfigurations({});
-  QVERIFY(manager.loadFromLightpadDir());
-  const DebugConfiguration saved = manager.resolveVariables(
-      manager.configuration(dialog.selectedConfigurationName()));
-  QCOMPARE(saved.args, QStringList({"AAAA", "two words"}));
-  QCOMPARE(saved.program, dir.filePath("vulnerable"));
-  const auto adapter = DebugAdapterRegistry::instance().adapter("cppdbg-gdb");
-  QVERIFY(adapter);
-  QCOMPARE(adapter->launchArguments(saved)["args"].toArray(),
-           QJsonArray({"AAAA", "two words"}));
-}
-
-void TestDap::testDebugConfigurationDialogDebouncesStatusProbe() {
-  DebugConfigurationManager &manager = DebugConfigurationManager::instance();
-  const QList<DebugConfiguration> original = manager.allConfigurations();
-  manager.replaceConfigurations({});
-
-  {
-    DebugConfigurationDialog dialog;
-    dialog.m_typeCombo->setCurrentText("debugpy");
-    for (const QChar ch : QString("/tmp/prog")) {
-      dialog.m_programEdit->setText(dialog.m_programEdit->text() + ch);
-    }
-    QVERIFY(dialog.m_statusTimer->isActive());
-    QVERIFY(dialog.m_adapterStatusLabel->text().contains("checking"));
-    QTRY_VERIFY_WITH_TIMEOUT(!dialog.m_statusTimer->isActive(), 5000);
-    QTRY_VERIFY_WITH_TIMEOUT(
-        !dialog.m_adapterStatusLabel->text().contains("checking"), 30000);
-    QVERIFY(!dialog.m_statusCache.isEmpty());
-  }
 
   manager.replaceConfigurations(original);
 }

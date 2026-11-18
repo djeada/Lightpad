@@ -1,7 +1,9 @@
 #include "debugsession.h"
+
 #include "../core/logging/logger.h"
 #include "breakpointmanager.h"
 #include "debugadapterregistry.h"
+#include "debugoutputfilter.h"
 
 #include <QFileInfo>
 #include <QMetaMethod>
@@ -429,7 +431,11 @@ void DebugSession::reportTermination() {
 
 void DebugSession::onClientOutput(const DapOutputEvent &event) {
   if (event.category != QLatin1String("telemetry")) {
-    m_outputHistory += event.output;
+    const bool adapterOutput =
+        event.category.isEmpty() || event.category == QLatin1String("console");
+    m_outputHistory +=
+        adapterOutput ? DebugOutputFilter::withoutAdapterChatter(event.output)
+                      : event.output;
     if (m_outputHistory.size() > 131072)
       m_outputHistory = m_outputHistory.right(131072);
   }

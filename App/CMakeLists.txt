@@ -40,7 +40,6 @@ endif()
 
 set(project_ui 
     ui/mainwindow.ui
-    ui/dialogs/runconfigurations.ui
     ui/dialogs/shortcuts.ui
     ui/panels/terminal.ui)
 
@@ -80,6 +79,9 @@ set(project_headers
     database/connectionstore.h
     database/queryhistory.h
     database/dockerdiscovery.h
+    database/dbconnectionurl.h
+    database/dbconnectiontemplates.h
+    database/dbprojectdiscovery.h
     database/resultexporter.h
     database/columnprofiler.h
     database/databasemanager.h
@@ -279,9 +281,12 @@ set(project_headers
     ui/dialogs/preferences.h
     ui/dialogs/pythonenvironmentdialog.h
     settings/settingsmanager.h
-    ui/dialogs/runconfigurations.h
-    ui/dialogs/runtemplateselector.h
-    ui/dialogs/debugconfigurationdialog.h
+    ui/dialogs/launchconfigurationsdialog.h
+    ui/dialogs/launchtemplategallery.h
+    ui/dialogs/breakpointeditordialog.h
+    ui/applicationstylesheet.h
+    ui/deferredrestyle.h
+    ui/widgets/keyvaluetable.h
     ui/dialogs/testconfigurationdialog.h
     ui/dialogs/formattemplateselector.h
     ui/dialogs/shortcuts.h
@@ -300,8 +305,10 @@ set(project_headers
     filetree/projectsearch.h
     filetree/explorersearchwidget.h
     run_templates/runtemplatemanager.h
-    run_templates/runconfiguration.h
     run_templates/runtargetresolver.h
+    run_templates/launchplanner.h
+    run_templates/launchtemplatecatalog.h
+    core/pathvariables.h
     format_templates/formattemplatemanager.h
     test_templates/testconfiguration.h
     test_templates/testdiscovery.h
@@ -365,6 +372,9 @@ set(project_sources
     database/connectionstore.cpp
     database/queryhistory.cpp
     database/dockerdiscovery.cpp
+    database/dbconnectionurl.cpp
+    database/dbconnectiontemplates.cpp
+    database/dbprojectdiscovery.cpp
     database/resultexporter.cpp
     database/columnprofiler.cpp
     database/databasemanager.cpp
@@ -384,6 +394,9 @@ set(project_sources
     dap/adapters/lldbdebugadapter.cpp
     dap/adapters/godebugadapter.cpp
     dap/adapters/rustdebugadapter.cpp
+    dap/adapters/genericdebugadapter.cpp
+    dap/adapters/genericdebugadapter.h
+    dap/debugoutputfilter.h
     dap/breakpointmanager.cpp
     dap/debugconfiguration.cpp
     dap/watchmanager.cpp
@@ -571,6 +584,7 @@ set(project_sources
     ui/mainwindow_navigation.cpp
     ui/mainwindow_diagnostics.cpp
     ui/mainwindow_debug.cpp
+    ui/mainwindow_launch.cpp
     ui/mainwindow_actions.cpp
     ui/mainwindow_git.cpp
     ui/dialogs/gitrepositorybrowser.cpp
@@ -581,9 +595,11 @@ set(project_sources
     ui/dialogs/preferences.cpp
     ui/dialogs/pythonenvironmentdialog.cpp
     settings/settingsmanager.cpp
-    ui/dialogs/runconfigurations.cpp
-    ui/dialogs/runtemplateselector.cpp
-    ui/dialogs/debugconfigurationdialog.cpp
+    ui/dialogs/launchconfigurationsdialog.cpp
+    ui/dialogs/launchtemplategallery.cpp
+    ui/dialogs/breakpointeditordialog.cpp
+    ui/applicationstylesheet.cpp
+    ui/widgets/keyvaluetable.cpp
     ui/dialogs/testconfigurationdialog.cpp
     ui/dialogs/formattemplateselector.cpp
     ui/dialogs/shortcuts.cpp
@@ -601,8 +617,9 @@ set(project_sources
     filetree/projectsearch.cpp
     filetree/explorersearchwidget.cpp
     run_templates/runtemplatemanager.cpp
-    run_templates/runconfiguration.cpp
     run_templates/runtargetresolver.cpp
+    run_templates/launchplanner.cpp
+    run_templates/launchtemplatecatalog.cpp
     format_templates/formattemplatemanager.cpp
     test_templates/testconfiguration.cpp
     test_templates/testdiscovery.cpp
@@ -631,6 +648,8 @@ set(project_resources
     icons.qrc
     messages.qrc
     run_templates/run_templates.qrc
+    database/database.qrc
+    dap/dap.qrc
     format_templates/format_templates.qrc
     test_templates/test_templates.qrc)
 

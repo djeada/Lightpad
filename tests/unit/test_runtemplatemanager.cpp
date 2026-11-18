@@ -10,7 +10,6 @@
 #include <QtTest>
 
 #include "run_templates/runtemplatemanager.h"
-#include "ui/dialogs/runtemplateselector.h"
 
 class TestRunTemplateManager : public QObject {
   Q_OBJECT
@@ -33,7 +32,9 @@ private slots:
   void testPythonEnvironmentDisablesOutputBuffering();
   void testEmptyFilePath();
   void testWorkspaceFolderSubstitution();
-  void testRunTemplateSelectorQuoteRoundTrip();
+  void testCFilesUseTheCTemplate();
+  void testShellTemplatesPassArgumentsToTheProgram();
+  void testDebugRecipesAreWellFormed();
   void testShellSubstitutionQuotesValues_data();
   void testShellSubstitutionQuotesValues();
   void testShellSubstitutionLeavesUnknownVariables();
@@ -354,54 +355,84 @@ void TestRunTemplateManager::testWorkspaceFolderSubstitution() {
   QCOMPARE(result, QString("/tmp/lightpad-workspace/src"));
 }
 
-void TestRunTemplateManager::testRunTemplateSelectorQuoteRoundTrip() {
+void TestRunTemplateManager::testCFilesUseTheCTemplate() {
   RunTemplateManager &manager = RunTemplateManager::instance();
   manager.loadTemplates();
   manager.setWorkspaceFolder(m_tempDir.path());
 
-  QString testFile = m_tempDir.path() + "/quote_roundtrip.cpp";
+  // The language catalog files C under "cpp", so the extension decides.
+  QCOMPARE(
+      manager.effectiveTemplateIdForFile(m_tempDir.path() + "/hello.c", "cpp"),
+      QString("c_gcc"));
+  QCOMPARE(manager.effectiveTemplateIdForFile(m_tempDir.path() + "/hello.cpp",
+                                              "cpp"),
+           QString("cpp_gcc"));
+  // ".C" is a C++ extension; it must not capture ".c" files.
+  QVERIFY(manager.getTemplatesForExtension("C").size() >= 3);
+  for (const RunTemplate &tmpl : manager.getTemplatesForExtension("c")) {
+    QVERIFY2(tmpl.languageId != "cpp" || tmpl.id.startsWith("c_"),
+             qPrintable(tmpl.id));
+  }
+  manager.setWorkspaceFolder(QString());
+}
+
+void TestRunTemplateManager::testShellTemplatesPassArgumentsToTheProgram() {
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.loadTemplates();
+  manager.setWorkspaceFolder(m_tempDir.path());
+
+  const QString testFile = m_tempDir.path() + "/args_roundtrip.cpp";
   QFile file(testFile);
-  file.open(QIODevice::WriteOnly);
+  QVERIFY(file.open(QIODevice::WriteOnly));
   file.write("int main() { return 0; }\n");
   file.close();
 
-  FileTemplateAssignment originalAssignment;
-  originalAssignment.templateId = "cpp_gcc";
-  originalAssignment.customArgs = QStringList()
-                                  << "--gtest_filter" << "Suite Name.*";
-  originalAssignment.compilerFlags = QStringList()
-                                     << "-DTEST_LABEL=With Space" << "-O2";
-  QVERIFY(manager.assignTemplateToFile(testFile, originalAssignment));
+  FileTemplateAssignment assignment;
+  assignment.templateId = "cpp_gcc";
+  assignment.customArgs = {"--name", "two words"};
+  assignment.compilerFlags = {"-O2"};
+  QVERIFY(manager.assignTemplateToFile(testFile, assignment));
 
-  RunTemplateSelector selector(testFile);
-
-  auto findByPlaceholder = [&selector](const QString &needle) -> QLineEdit * {
-    for (QLineEdit *edit : selector.findChildren<QLineEdit *>()) {
-      if (edit && edit->placeholderText().contains(needle)) {
-        return edit;
-      }
-    }
-    return nullptr;
-  };
-
-  QLineEdit *customArgsEdit = findByPlaceholder("Additional arguments");
-  QLineEdit *compilerFlagsEdit = findByPlaceholder("-std=c++17");
-
-  QVERIFY(customArgsEdit != nullptr);
-  QVERIFY(compilerFlagsEdit != nullptr);
-
-  QVERIFY(customArgsEdit->text().contains("\"Suite Name.*\""));
-  QVERIFY(compilerFlagsEdit->text().contains("\"-DTEST_LABEL=With Space\""));
-
-  QVERIFY(
-      QMetaObject::invokeMethod(&selector, "onAccept", Qt::DirectConnection));
-
-  FileTemplateAssignment savedAssignment =
-      manager.getAssignmentForFile(testFile);
-  QCOMPARE(savedAssignment.customArgs, originalAssignment.customArgs);
-  QCOMPARE(savedAssignment.compilerFlags, originalAssignment.compilerFlags);
-
+  const QPair<QString, QStringList> command = manager.buildCommand(testFile);
+  QCOMPARE(command.first, QString("bash"));
+  const QString script = command.second.last();
+  const int run = script.indexOf("&&");
+  QVERIFY(run > 0);
+  // Flags compile, arguments go to the program after "&&", quoted.
+  QVERIFY(script.left(run).contains("-O2"));
+  QVERIFY(!script.left(run).contains("--name"));
+  QVERIFY(script.mid(run).contains("'--name' 'two words'"));
   QVERIFY(manager.removeAssignment(testFile));
+  manager.setWorkspaceFolder(QString());
+}
+
+void TestRunTemplateManager::testDebugRecipesAreWellFormed() {
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.loadTemplates();
+  int debuggable = 0;
+  for (const RunTemplate &tmpl : manager.getAllTemplates()) {
+    if (!tmpl.isDebuggable()) {
+      continue;
+    }
+    ++debuggable;
+    QVERIFY2(!tmpl.debug.value("type").toString().isEmpty(),
+             qPrintable(tmpl.id));
+    const QJsonArray build = tmpl.debug.value("build").toArray();
+    if (!build.isEmpty()) {
+      QStringList parts;
+      for (const QJsonValue &part : build) {
+        parts << part.toString();
+      }
+      // A debug build must produce the program the debugger starts.
+      QVERIFY2(parts.contains("-g"), qPrintable(tmpl.id));
+      QVERIFY2(parts.contains(tmpl.debug.value("program").toString()),
+               qPrintable(tmpl.id));
+    }
+  }
+  QVERIFY(debuggable >= 15);
+  QVERIFY(manager.getTemplateById("python3").isDebuggable());
+  QVERIFY(manager.getTemplateById("c_clang").isDebuggable());
+  QVERIFY(!manager.getTemplateById("pdflatex").isDebuggable());
 }
 
 void TestRunTemplateManager::testShellSubstitutionQuotesValues_data() {

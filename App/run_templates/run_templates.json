@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Lightpad Run Templates - Extensive library of run configurations for various programming languages",
+  "description": "Lightpad run templates: how Run (and Debug, via the optional \"debug\" recipe) starts a file of each language",
   "templates": [
     {
       "id": "python3",
@@ -16,7 +16,11 @@
         "${file}"
       ],
       "workingDirectory": "${workspaceFolder}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "debugpy",
+        "program": "${file}"
+      }
     },
     {
       "id": "python2",
@@ -47,7 +51,11 @@
         "${fileBasenameNoExt}"
       ],
       "workingDirectory": "${workspaceFolder}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "debugpy",
+        "module": "${fileBasenameNoExt}"
+      }
     },
     {
       "id": "python_pytest_file",
@@ -65,7 +73,11 @@
         "-q"
       ],
       "workingDirectory": "${workspaceFolder}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "debugpy",
+        "module": "pytest"
+      }
     },
     {
       "id": "python_pytest_workspace",
@@ -82,7 +94,11 @@
         "-q"
       ],
       "workingDirectory": "${workspaceFolder}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "debugpy",
+        "module": "pytest"
+      }
     },
     {
       "id": "cpp_gcc",
@@ -101,7 +117,20 @@
         "g++ -std=c++17 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "cppdbg",
+        "build": [
+          "g++",
+          "-std=c++17",
+          "-g",
+          "-O0",
+          "-o",
+          "${fileDir}/${fileBasenameNoExt}",
+          "${file}"
+        ],
+        "program": "${fileDir}/${fileBasenameNoExt}"
+      }
     },
     {
       "id": "cpp_clang",
@@ -120,7 +149,20 @@
         "clang++ -std=c++17 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "cppdbg",
+        "build": [
+          "clang++",
+          "-std=c++17",
+          "-g",
+          "-O0",
+          "-o",
+          "${fileDir}/${fileBasenameNoExt}",
+          "${file}"
+        ],
+        "program": "${fileDir}/${fileBasenameNoExt}"
+      }
     },
     {
       "id": "cpp_debug",
@@ -139,7 +181,20 @@
         "g++ -std=c++17 -g -O0 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "cppdbg",
+        "build": [
+          "g++",
+          "-std=c++17",
+          "-g",
+          "-O0",
+          "-o",
+          "${fileDir}/${fileBasenameNoExt}",
+          "${file}"
+        ],
+        "program": "${fileDir}/${fileBasenameNoExt}"
+      }
     },
     {
       "id": "cpp_cmake_ctest",
@@ -198,7 +253,23 @@
         "gcc -std=c11 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "cppdbg",
+        "build": [
+          "gcc",
+          "-std=c11",
+          "-g",
+          "-O0",
+          "-o",
+          "${fileDir}/${fileBasenameNoExt}",
+          "${file}"
+        ],
+        "program": "${fileDir}/${fileBasenameNoExt}"
+      },
+      "defaultFor": [
+        "c"
+      ]
     },
     {
       "id": "c_clang",
@@ -214,7 +285,20 @@
         "clang -std=c11 -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "cppdbg",
+        "build": [
+          "clang",
+          "-std=c11",
+          "-g",
+          "-O0",
+          "-o",
+          "${fileDir}/${fileBasenameNoExt}",
+          "${file}"
+        ],
+        "program": "${fileDir}/${fileBasenameNoExt}"
+      }
     },
     {
       "id": "go_run",
@@ -230,7 +314,12 @@
         "${file}"
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "go",
+        "mode": "debug",
+        "program": "${file}"
+      }
     },
     {
       "id": "go_run_package",
@@ -246,7 +335,12 @@
         "."
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "go",
+        "mode": "debug",
+        "program": "${fileDir}"
+      }
     },
     {
       "id": "go_build_run",
@@ -262,7 +356,12 @@
         "go build -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "go",
+        "mode": "debug",
+        "program": "${file}"
+      }
     },
     {
       "id": "go_test",
@@ -279,7 +378,12 @@
         "./..."
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "go",
+        "mode": "test",
+        "program": "${fileDir}"
+      }
     },
     {
       "id": "go_build",
@@ -334,7 +438,11 @@
         "${file}"
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "node",
+        "program": "${file}"
+      }
     },
     {
       "id": "nodejs_esm",
@@ -351,7 +459,11 @@
         "${file}"
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "node",
+        "program": "${file}"
+      }
     },
     {
       "id": "npm_start",
@@ -445,7 +557,14 @@
         "${file}"
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "node",
+        "program": "${file}",
+        "runtimeArgs": [
+          "--test"
+        ]
+      }
     },
     {
       "id": "deno",
@@ -481,7 +600,15 @@
         "${file}"
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "node",
+        "program": "${file}",
+        "runtimeExecutable": "npx",
+        "runtimeArgs": [
+          "tsx"
+        ]
+      }
     },
     {
       "id": "typescript_ts_node",
@@ -596,7 +723,18 @@
         "rustc \"${file}\" -o \"${fileBasenameNoExt}\" && ./\"${fileBasenameNoExt}\""
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "cppdbg",
+        "build": [
+          "rustc",
+          "-g",
+          "-o",
+          "${fileDir}/${fileBasenameNoExt}",
+          "${file}"
+        ],
+        "program": "${fileDir}/${fileBasenameNoExt}"
+      }
     },
     {
       "id": "rust_cargo_run",
@@ -1341,7 +1479,19 @@
         "gfortran -o \"${fileBasenameNoExt}\" \"${file}\" && ./\"${fileBasenameNoExt}\""
       ],
       "workingDirectory": "${fileDir}",
-      "env": {}
+      "env": {},
+      "debug": {
+        "type": "cppdbg",
+        "build": [
+          "gfortran",
+          "-g",
+          "-O0",
+          "-o",
+          "${fileDir}/${fileBasenameNoExt}",
+          "${file}"
+        ],
+        "program": "${fileDir}/${fileBasenameNoExt}"
+      }
     },
     {
       "id": "assembly_nasm",
@@ -1848,10 +1998,15 @@
   ],
   "variables": {
     "${file}": "Full path to the current file",
-    "${fileDir}": "Directory containing the current file",
+    "${fileDir}": "Directory containing the current file (also ${fileDirname})",
     "${fileBasename}": "Filename with extension",
-    "${fileBasenameNoExt}": "Filename without extension",
-    "${fileExt}": "File extension",
-    "${workspaceFolder}": "Root folder of the workspace/project"
+    "${fileBasenameNoExt}": "Filename without extension (also ${fileBasenameNoExtension})",
+    "${fileExt}": "File extension without the dot (${fileExtname} includes it)",
+    "${relativeFile}": "Current file relative to the workspace",
+    "${workspaceFolder}": "Root folder of the workspace/project",
+    "${workspaceFolderBasename}": "Name of the workspace folder",
+    "${projectRoot}": "Nearest folder containing one of the template's projectMarkers",
+    "${python}": "Interpreter of the configured Python environment",
+    "${env:NAME}": "Value of the environment variable NAME"
   }
 }

@@ -653,12 +653,12 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   </action>
   <action name="actionStart_Debug_Configuration">
    <property name="text">
-    <string>Start Debug Configuration...</string>
+    <string>Select Launch Target…</string>
    </property>
   </action>
   <action name="actionEdit_Configurations">
    <property name="text">
-    <string>Edit Configurations</string>
+    <string>Edit Configurations…</string>
    </property>
   </action>
   <action name="actionEdit_Test_Configurations">
@@ -668,7 +668,7 @@ qproperty-icon: url(":/resources/icons/wand_dark.png");
   </action>
   <action name="actionEdit_Debug_Configurations">
    <property name="text">
-    <string>Edit Debug Configurations</string>
+    <string>Edit Run and Debug Configurations…</string>
    </property>
   </action>
   <action name="actionFormat_Document">

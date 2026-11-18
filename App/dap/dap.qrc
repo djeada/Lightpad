@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/dap">
+        <file>debug_adapters.json</file>
+    </qresource>
+</RCC>

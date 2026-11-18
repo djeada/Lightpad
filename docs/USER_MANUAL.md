@@ -88,27 +88,73 @@ Lightpad works like any standard text editor:
 
 ## Features
 
-### Building and Debugging CMake Projects
+### Running and Debugging
 
-When you start debugging a C/C++ file inside a project that contains a
-`CMakeLists.txt`, Lightpad builds the project automatically before launching
-the debugger:
+**Run** (`Ctrl+F5`) and **Debug** (`F5`) in the workspace header start the
+same *launch target*. The Run button shows its name; either arrow opens the
+launch menu, where you pick the target and reach every launch setting:
+
+- **Current File** (the default) starts the file in the editor, chosen
+  automatically: a CMake target that owns a C/C++ file, pytest for test files,
+  the project's web server for FastAPI/Flask backends, `cargo run`,
+  `go run .`, `npm start`, or the language's run template. **Run With**
+  switches the template for this file, **Always Run** pins the file while you
+  switch tabs, and **CMake Target** picks the executable when several exist.
+- **Saved configurations** start the same program every time, whichever file
+  is open: a web server, a CLI with test arguments, an attach to a running
+  process. **Compounds** start several configurations together.
+
+Debug always uses what Run uses: the same arguments, environment, working
+directory and Python environment. For compiled single files it rebuilds the
+program with debug information (`-g -O0`, using the template's compiler, extra
+sources and flags) before the debugger starts. Lightpad saves modified files
+before every launch.
+
+**Run > Edit Configurations…** opens one dialog for everything:
+
+- **Current File** sets how the file runs: template, arguments, working
+  directory, environment variables, before-launch and after-stop commands,
+  compiler flags and extra sources (C, C++, Rust), and the Python environment.
+  The preview shows the exact command Run executes and what Debug starts.
+  **Reset to Defaults** returns to automatic behaviour.
+- **Add** creates a configuration from a template (Python file, module,
+  pytest, FastAPI, Flask, Django and attach; Node.js, npm scripts and
+  TypeScript; C/C++ launch, CMake, make, attach and gdbserver; Rust; Go;
+  Java; shell scripts, make targets, Docker Compose and any command). **From
+  How file Runs** turns the current file's settings into a saved
+  configuration.
+- Each configuration has a **Debugger** (or **None (run only)**), a launch or
+  attach mode, program or module, arguments, working directory, environment,
+  **Before launch** and **After stop** shell commands, debugger options, and
+  an **Advanced** box for any other launch.json property.
+- **Run** and **Debug** in the dialog save and start the selected entry.
+
+Configurations are saved in `.lightpad/debug/launch.json` (VS Code's
+launch.json format, so configurations copied from VS Code work) and the
+current file settings in `.lightpad/run_config.json`. Fields accept variables
+such as `${file}`, `${fileDirname}`, `${workspaceFolder}`, `${relativeFile}`,
+`${python}` and `${env:NAME}`; see [Run and Debug](RUN_AND_DEBUG.md) for the
+full list, the file formats and how to add your own templates.
+
+#### Building CMake Projects Before Debugging
+
+When you debug a C/C++ file inside a project with a `CMakeLists.txt`, or a
+saved C/C++ configuration whose program names a CMake target, Lightpad builds
+it first:
 
 1. The project is configured on first use (`cmake -S . -B build`); results are
    cached in `build/`.
-2. `cmake --build build -j<nproc>` compiles the targets, with a progress
-   dialog showing live output (Cancel aborts the build).
+2. `cmake --build build -j<nproc>` compiles the target, with live output in
+   the terminal.
 3. If `CMakeLists.txt` declares exactly one executable target, it is selected
    automatically; with several targets a picker dialog appears.
 4. The debug session launches against the freshly built binary.
 
-Notes:
-- Override the build directory per configuration with `"cmakeBinaryDir"` in
-  the launch configuration.
-- A `preLaunchTask` string in the debug configuration runs as a shell command
-  from the project root before the CMake step (useful for code generators).
-- Projects without `CMakeLists.txt` keep the single-file behavior: the current
-  file is compiled with `-g -O0` when its binary is missing or stale.
+Override the build directory per configuration with `"cmakeBinaryDir"` in
+its Advanced properties. A configuration's **Before launch** command runs
+before the CMake step (useful for code generators); its output appears in the
+terminal, and a failure stops the launch with the errors in the Problems
+panel.
 
 ### Inspecting Debugger Values
 
@@ -352,7 +398,11 @@ for future sessions.
 Open **Database → Database Panel** (`Ctrl+Shift+D`) to connect to SQLite,
 SQL Server, PostgreSQL or MySQL/MariaDB - directly or inside a Docker
 container - browse tables, run SQL from `.sql` files (`F9`) or the console, and
-inspect, export and profile results. See [DATABASE_TOOLS.md](DATABASE_TOOLS.md).
+inspect, export and profile results. **New connection** lists the databases
+your project already describes (`DATABASE_URL` in `.env`, compose services,
+SQLite files), running Docker containers, and templates for local servers and
+cloud services (Supabase, Neon, RDS, Cloud SQL, Azure, PlanetScale, …); you
+can also paste any connection URL. See [DATABASE_TOOLS.md](DATABASE_TOOLS.md).
 
 The SQL console shares the editor's tab width and spaces/tabs preference. Tab and Shift+Tab indent or outdent selected lines; Enter preserves
 indentation, and Backspace in leading whitespace returns to the previous tab
