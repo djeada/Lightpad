@@ -1,3 +1,4 @@
+#include "deferredrestyle.h"
 #include "mainwindow_internal.h"
 
 void MainWindow::showProblemsPanel() {
@@ -229,7 +230,9 @@ void MainWindow::ensureConflictCenterPanel() {
   conflictCenterPanel = new ConflictCenterPanel(this);
   conflictCenterPanel->setObjectName("conflictCenterPanel");
   conflictCenterPanel->setGitIntegration(m_gitIntegration);
-  conflictCenterPanel->applyTheme(getTheme());
+  DeferredRestyle::apply(
+      conflictCenterPanel, QStringLiteral("theme"),
+      [w = conflictCenterPanel, theme = getTheme()] { w->applyTheme(theme); });
 
   connect(
       conflictCenterPanel, &ConflictCenterPanel::fileOpenRequested, this,
@@ -487,9 +490,14 @@ void MainWindow::ensureDebugPanel() {
 
   debugPanel = new DebugPanel(this);
   debugPanel->setObjectName("debugPanel");
-  debugPanel->applyTheme(getTheme());
-  debugPanel->setContentFont(settings.mainFont);
   debugPanel->hide();
+  // Styled when the dock is first opened (see DeferredRestyle).
+  DeferredRestyle::apply(
+      debugPanel, QStringLiteral("theme"),
+      [w = debugPanel, theme = getTheme(), font = settings.mainFont] {
+        w->applyTheme(theme);
+        w->setContentFont(font);
+      });
 
   connect(debugPanel, &DebugPanel::locationClicked, this,
           [this](const QString &filePath, int line, int column) {
@@ -553,7 +561,7 @@ void MainWindow::ensureDebugPanel() {
             }
           });
   connect(debugPanel, &DebugPanel::inlineValuesChanged, this,
-          [this](const QString &filePath, int line,
+          [this](const QString &filePath, int line, const QString &function,
                  const QHash<QString, QString> &values) {
             if (values.isEmpty() || filePath.isEmpty()) {
               updateAllTextAreas(&TextArea::clearDebugInlineValues);
@@ -566,7 +574,7 @@ void MainWindow::ensureDebugPanel() {
             for (LightpadTabWidget *tabWidget : allTabWidgets()) {
               const auto textAreas = tabWidget->findChildren<TextArea *>();
               for (TextArea *area : textAreas) {
-                area->setDebugInlineValues(canonical, line, values);
+                area->setDebugInlineValues(canonical, line, function, values);
               }
             }
           });
@@ -646,8 +654,12 @@ void MainWindow::ensureTestPanel() {
   TestConfigurationManager::instance().loadTemplates();
   testPanel = new TestPanel(this);
   testPanel->setObjectName("testPanel");
-  testPanel->applyTheme(getTheme());
-  testPanel->setContentFont(settings.mainFont);
+  DeferredRestyle::apply(
+      testPanel, QStringLiteral("theme"),
+      [w = testPanel, theme = getTheme(), font = settings.mainFont] {
+        w->applyTheme(theme);
+        w->setContentFont(font);
+      });
 
   if (!m_projectRootPath.isEmpty()) {
     testPanel->setWorkspaceFolder(m_projectRootPath);
@@ -799,28 +811,6 @@ void MainWindow::polishDockTabBars() {
   for (QTabBar *tabBar : tabBars) {
     tabBar->setElideMode(Qt::ElideNone);
   }
-}
-
-QString MainWindow::activeDebugTarget() const {
-  const SettingsManager &settings = SettingsManager::instance();
-  const QString target =
-      settings.getValue("activeDebugTarget", QString()).toString().trimmed();
-  if (target.isEmpty()) {
-    return {};
-  }
-  const QString owner =
-      settings.getValue("activeDebugTargetProject", QString()).toString();
-  if (QDir::cleanPath(owner) != QDir::cleanPath(m_projectRootPath)) {
-    return {};
-  }
-  return target;
-}
-
-void MainWindow::setActiveDebugTarget(const QString &target) {
-  SettingsManager &settings = SettingsManager::instance();
-  settings.setValue("activeDebugTarget", target);
-  settings.setValue("activeDebugTargetProject",
-                    target.isEmpty() ? QString() : m_projectRootPath);
 }
 
 void MainWindow::on_actionToggle_Test_Panel_triggered() {

@@ -74,7 +74,6 @@ private:
   DebugSettings &operator=(const DebugSettings &) = delete;
 
   void ensureDirectoryExists();
-  void createDefaultLaunchConfig();
   void createDefaultBreakpointsConfig();
   void createDefaultWatchesConfig();
   void createDefaultAdaptersConfig();

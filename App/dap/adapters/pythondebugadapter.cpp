@@ -113,6 +113,48 @@ public:
     return arguments;
   }
 
+  RunCommand
+  runCommand(const DebugConfiguration &configuration) const override {
+    RunCommand command = AbstractDebugAdapter::runCommand(configuration);
+    const QString module =
+        configuration.adapterConfig.value("module").toString().trimmed();
+    if (configuration.request.compare("attach", Qt::CaseInsensitive) == 0) {
+      return command;
+    }
+    command.error.clear();
+    QString python =
+        configuration.adapterConfig.value("python").toString().trimmed();
+    if (python.isEmpty()) {
+      python = preferredPythonInterpreterCandidate(
+          &configuration, configuration.program, configuration.cwd);
+    }
+    if (python.isEmpty()) {
+      command.error = QStringLiteral("No Python interpreter was found.");
+      return command;
+    }
+    command.program = python;
+    command.arguments.clear();
+    if (!module.isEmpty()) {
+      command.arguments << "-m" << module;
+    } else if (!configuration.program.isEmpty()) {
+      command.arguments << configuration.program;
+    } else {
+      command.error =
+          QStringLiteral("Set the script or module the configuration runs.");
+      return command;
+    }
+    command.arguments << configuration.args;
+    const PythonEnvironmentPreference preference = {
+        configuration.pythonMode, configuration.pythonInterpreter,
+        configuration.pythonVenvPath, configuration.pythonRequirementsFile};
+    command.environment = PythonProjectEnvironment::activationEnvironment(
+        PythonProjectEnvironment::resolve(
+            preference, DebugConfigurationManager::instance().workspaceFolder(),
+            configuration.program, configuration.cwd));
+    command.environment.insert("PYTHONUNBUFFERED", "1");
+    return command;
+  }
+
   QJsonObject createAttachConfig(int processId, const QString &host,
                                  int port) const override {
     QJsonObject config;

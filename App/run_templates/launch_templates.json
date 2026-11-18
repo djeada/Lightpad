@@ -1,0 +1,774 @@
+{
+  "version": 1,
+  "description": "Ready-made launch configurations offered by Run > Edit Configurations > Add. Each \"configuration\" is a launch.json entry; type \"command\" runs a program without a debugger. Add your own in <config dir>/Lightpad/launch_templates.json.",
+  "categories": [
+    "Python",
+    "JavaScript & TypeScript",
+    "C & C++",
+    "Rust",
+    "Go",
+    "Java & JVM",
+    ".NET",
+    "Dart & Flutter",
+    "OCaml",
+    "Tools"
+  ],
+  "templates": [
+    {
+      "id": "python.file",
+      "category": "Python",
+      "name": "Python: Current File",
+      "description": "Runs or debugs the Python file open in the editor with the project's environment.",
+      "languages": [
+        "py"
+      ],
+      "configuration": {
+        "type": "debugpy",
+        "request": "launch",
+        "program": "${file}",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "python.script",
+      "category": "Python",
+      "name": "Python: Script",
+      "description": "Always starts the same script, whichever file is open. Point Program at your entry point.",
+      "languages": [
+        "py"
+      ],
+      "markers": [
+        "main.py",
+        "app.py"
+      ],
+      "configuration": {
+        "type": "debugpy",
+        "request": "launch",
+        "program": "${workspaceFolder}/main.py",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "python.module",
+      "category": "Python",
+      "name": "Python: Module",
+      "description": "Runs a package or module like python -m. Set Module to the dotted module name.",
+      "languages": [
+        "py"
+      ],
+      "markers": [
+        "pyproject.toml",
+        "setup.py"
+      ],
+      "configuration": {
+        "type": "debugpy",
+        "request": "launch",
+        "module": "${workspaceFolderBasename}",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "python.pytest",
+      "category": "Python",
+      "name": "Python: pytest",
+      "description": "Runs the test suite with pytest; debugging stops at breakpoints in tests and library code.",
+      "languages": [
+        "py"
+      ],
+      "markers": [
+        "pytest.ini",
+        "conftest.py",
+        "tests"
+      ],
+      "configuration": {
+        "type": "debugpy",
+        "request": "launch",
+        "module": "pytest",
+        "args": [
+          "-q"
+        ],
+        "cwd": "${workspaceFolder}",
+        "justMyCode": false
+      }
+    },
+    {
+      "id": "python.fastapi",
+      "category": "Python",
+      "name": "Python: FastAPI (uvicorn)",
+      "description": "Serves main:app with uvicorn and reloads on save. Change the app path in Arguments.",
+      "languages": [
+        "py"
+      ],
+      "markers": [
+        "main.py"
+      ],
+      "configuration": {
+        "type": "debugpy",
+        "request": "launch",
+        "module": "uvicorn",
+        "args": [
+          "main:app",
+          "--reload"
+        ],
+        "cwd": "${workspaceFolder}",
+        "jinja": true,
+        "subProcess": true
+      }
+    },
+    {
+      "id": "python.flask",
+      "category": "Python",
+      "name": "Python: Flask",
+      "description": "Starts the Flask development server for FLASK_APP.",
+      "languages": [
+        "py"
+      ],
+      "markers": [
+        "app.py",
+        "wsgi.py"
+      ],
+      "configuration": {
+        "type": "debugpy",
+        "request": "launch",
+        "module": "flask",
+        "args": [
+          "run",
+          "--no-debugger"
+        ],
+        "env": {
+          "FLASK_APP": "app.py",
+          "FLASK_DEBUG": "1"
+        },
+        "cwd": "${workspaceFolder}",
+        "jinja": true,
+        "subProcess": true
+      }
+    },
+    {
+      "id": "python.django",
+      "category": "Python",
+      "name": "Python: Django",
+      "description": "Runs manage.py runserver with template debugging.",
+      "languages": [
+        "py"
+      ],
+      "markers": [
+        "manage.py"
+      ],
+      "configuration": {
+        "type": "debugpy",
+        "request": "launch",
+        "program": "${workspaceFolder}/manage.py",
+        "args": [
+          "runserver"
+        ],
+        "cwd": "${workspaceFolder}",
+        "django": true,
+        "subProcess": true
+      }
+    },
+    {
+      "id": "python.attach",
+      "category": "Python",
+      "name": "Python: Attach to debugpy",
+      "description": "Connects to a program started with python -m debugpy --listen 5678.",
+      "languages": [
+        "py"
+      ],
+      "configuration": {
+        "type": "debugpy",
+        "request": "attach",
+        "host": "127.0.0.1",
+        "port": 5678,
+        "pathMappings": [
+          {
+            "localRoot": "${workspaceFolder}",
+            "remoteRoot": "."
+          }
+        ]
+      }
+    },
+    {
+      "id": "python.attach-process",
+      "category": "Python",
+      "name": "Python: Attach to Process",
+      "description": "Picks a running Python process when the session starts.",
+      "languages": [
+        "py"
+      ],
+      "configuration": {
+        "type": "debugpy",
+        "request": "attach",
+        "processId": "${command:pickProcess}"
+      }
+    },
+    {
+      "id": "node.file",
+      "category": "JavaScript & TypeScript",
+      "name": "Node.js: Current File",
+      "description": "Runs or debugs the JavaScript file open in the editor.",
+      "languages": [
+        "js"
+      ],
+      "configuration": {
+        "type": "node",
+        "request": "launch",
+        "program": "${file}",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "node.program",
+      "category": "JavaScript & TypeScript",
+      "name": "Node.js: Program",
+      "description": "Always starts the same entry point. Point Program at it.",
+      "languages": [
+        "js",
+        "ts"
+      ],
+      "markers": [
+        "index.js",
+        "server.js"
+      ],
+      "configuration": {
+        "type": "node",
+        "request": "launch",
+        "program": "${workspaceFolder}/index.js",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "node.npm",
+      "category": "JavaScript & TypeScript",
+      "name": "npm: Script",
+      "description": "Runs an npm script (npm run-script start). Change the script name in the runtime arguments.",
+      "languages": [
+        "js",
+        "ts"
+      ],
+      "markers": [
+        "package.json"
+      ],
+      "configuration": {
+        "type": "node",
+        "request": "launch",
+        "runtimeExecutable": "npm",
+        "runtimeArgs": [
+          "run-script",
+          "start"
+        ],
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "node.tsx",
+      "category": "JavaScript & TypeScript",
+      "name": "TypeScript: Current File (tsx)",
+      "description": "Runs the open TypeScript file through npx tsx without a build step.",
+      "languages": [
+        "ts"
+      ],
+      "markers": [
+        "tsconfig.json"
+      ],
+      "configuration": {
+        "type": "node",
+        "request": "launch",
+        "runtimeExecutable": "npx",
+        "runtimeArgs": [
+          "tsx"
+        ],
+        "program": "${file}",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "node.test",
+      "category": "JavaScript & TypeScript",
+      "name": "Node.js: Test Runner",
+      "description": "Runs the open file with node --test.",
+      "languages": [
+        "js"
+      ],
+      "configuration": {
+        "type": "node",
+        "request": "launch",
+        "runtimeArgs": [
+          "--test"
+        ],
+        "program": "${file}",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "node.attach",
+      "category": "JavaScript & TypeScript",
+      "name": "Node.js: Attach",
+      "description": "Connects to a program started with node --inspect (port 9229).",
+      "languages": [
+        "js",
+        "ts"
+      ],
+      "configuration": {
+        "type": "node",
+        "request": "attach",
+        "host": "127.0.0.1",
+        "port": 9229
+      }
+    },
+    {
+      "id": "cpp.program",
+      "category": "C & C++",
+      "name": "C/C++: Launch Program",
+      "description": "Starts a compiled program under GDB or LLDB. Point Program at the executable.",
+      "languages": [
+        "c",
+        "cpp"
+      ],
+      "configuration": {
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/build/${workspaceFolderBasename}",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "cpp.cmake",
+      "category": "C & C++",
+      "name": "C/C++: Build with CMake and Launch",
+      "description": "Configures and builds the project into build/ before every launch, then starts the program.",
+      "languages": [
+        "c",
+        "cpp"
+      ],
+      "markers": [
+        "CMakeLists.txt"
+      ],
+      "configuration": {
+        "type": "cppdbg",
+        "request": "launch",
+        "preLaunchTask": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build -j",
+        "program": "${workspaceFolder}/build/${workspaceFolderBasename}",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "cpp.make",
+      "category": "C & C++",
+      "name": "C/C++: Build with make and Launch",
+      "description": "Runs make before every launch, then starts the program.",
+      "languages": [
+        "c",
+        "cpp"
+      ],
+      "markers": [
+        "Makefile",
+        "makefile"
+      ],
+      "configuration": {
+        "type": "cppdbg",
+        "request": "launch",
+        "preLaunchTask": "make",
+        "program": "${workspaceFolder}/${workspaceFolderBasename}",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "cpp.attach",
+      "category": "C & C++",
+      "name": "C/C++: Attach to Process",
+      "description": "Picks a running process when the session starts and attaches GDB to it.",
+      "languages": [
+        "c",
+        "cpp"
+      ],
+      "configuration": {
+        "type": "cppdbg",
+        "request": "attach",
+        "processId": "${command:pickProcess}",
+        "program": "${workspaceFolder}/build/${workspaceFolderBasename}"
+      }
+    },
+    {
+      "id": "cpp.gdbserver",
+      "category": "C & C++",
+      "name": "C/C++: Remote gdbserver",
+      "description": "Connects to gdbserver (gdbserver :1234 ./program) on another machine or container.",
+      "languages": [
+        "c",
+        "cpp"
+      ],
+      "configuration": {
+        "type": "cppdbg",
+        "request": "attach",
+        "host": "127.0.0.1",
+        "port": 1234,
+        "program": "${workspaceFolder}/build/${workspaceFolderBasename}"
+      }
+    },
+    {
+      "id": "cpp.lldb-dap",
+      "category": "C & C++",
+      "name": "LLDB: Program (lldb-dap)",
+      "description": "Debugs a built program with LLVM's lldb-dap: C, C++, Rust, Swift, Zig or Objective-C. Point Program at the binary.",
+      "languages": [
+        "c",
+        "cpp",
+        "rs",
+        "swift",
+        "zig"
+      ],
+      "markers": [
+        "CMakeLists.txt",
+        "Package.swift",
+        "build.zig",
+        "Cargo.toml"
+      ],
+      "configuration": {
+        "type": "lldb-dap",
+        "request": "launch",
+        "program": "${workspaceFolder}/build/app",
+        "args": [],
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "rust.cargo",
+      "category": "Rust",
+      "name": "Rust: Cargo Binary",
+      "description": "Runs cargo build, then starts target/debug/<crate> under the debugger.",
+      "languages": [
+        "rust"
+      ],
+      "markers": [
+        "Cargo.toml"
+      ],
+      "configuration": {
+        "type": "cppdbg",
+        "request": "launch",
+        "preLaunchTask": "cargo build",
+        "program": "${workspaceFolder}/target/debug/${workspaceFolderBasename}",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "rust.cargo-run",
+      "category": "Rust",
+      "name": "Rust: cargo run",
+      "description": "Builds and runs the crate with cargo (run only).",
+      "languages": [
+        "rust"
+      ],
+      "markers": [
+        "Cargo.toml"
+      ],
+      "configuration": {
+        "type": "command",
+        "request": "launch",
+        "program": "cargo",
+        "args": [
+          "run"
+        ],
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "go.package",
+      "category": "Go",
+      "name": "Go: Package",
+      "description": "Runs or debugs the main package at the project root with Delve.",
+      "languages": [
+        "go"
+      ],
+      "markers": [
+        "go.mod"
+      ],
+      "configuration": {
+        "type": "go",
+        "request": "launch",
+        "mode": "debug",
+        "program": "${workspaceFolder}",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "go.file",
+      "category": "Go",
+      "name": "Go: Current File",
+      "description": "Runs or debugs the Go file open in the editor.",
+      "languages": [
+        "go"
+      ],
+      "configuration": {
+        "type": "go",
+        "request": "launch",
+        "mode": "debug",
+        "program": "${file}",
+        "cwd": "${fileDir}"
+      }
+    },
+    {
+      "id": "go.test",
+      "category": "Go",
+      "name": "Go: Test Package",
+      "description": "Runs the tests of the open file's package (go test).",
+      "languages": [
+        "go"
+      ],
+      "configuration": {
+        "type": "go",
+        "request": "launch",
+        "mode": "test",
+        "program": "${fileDir}",
+        "cwd": "${fileDir}"
+      }
+    },
+    {
+      "id": "go.attach",
+      "category": "Go",
+      "name": "Go: Attach to Process",
+      "description": "Picks a running Go process when the session starts.",
+      "languages": [
+        "go"
+      ],
+      "configuration": {
+        "type": "go",
+        "request": "attach",
+        "mode": "local",
+        "processId": "${command:pickProcess}"
+      }
+    },
+    {
+      "id": "java.file",
+      "category": "Java & JVM",
+      "name": "Java: Single File",
+      "description": "Runs the open .java file directly with java (run only).",
+      "languages": [
+        "java"
+      ],
+      "configuration": {
+        "type": "command",
+        "request": "launch",
+        "program": "java",
+        "args": [
+          "${file}"
+        ],
+        "cwd": "${fileDir}"
+      }
+    },
+    {
+      "id": "java.gradle",
+      "category": "Java & JVM",
+      "name": "Gradle: run",
+      "description": "Runs the application with the Gradle wrapper (run only).",
+      "languages": [
+        "java",
+        "kotlin"
+      ],
+      "markers": [
+        "gradlew",
+        "build.gradle",
+        "build.gradle.kts"
+      ],
+      "configuration": {
+        "type": "command",
+        "request": "launch",
+        "program": "${workspaceFolder}/gradlew",
+        "args": [
+          "run"
+        ],
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "java.maven",
+      "category": "Java & JVM",
+      "name": "Maven: exec:java",
+      "description": "Runs the main class configured for the exec plugin (run only).",
+      "languages": [
+        "java"
+      ],
+      "markers": [
+        "pom.xml"
+      ],
+      "configuration": {
+        "type": "command",
+        "request": "launch",
+        "program": "mvn",
+        "args": [
+          "-q",
+          "compile",
+          "exec:java"
+        ],
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "dotnet.launch",
+      "category": ".NET",
+      "name": ".NET: Launch (netcoredbg)",
+      "description": "Builds the project with dotnet build, then debugs the resulting .dll with netcoredbg. Adjust Program to your target framework and assembly name.",
+      "languages": [
+        "cs",
+        "fs"
+      ],
+      "markers": [
+        "*.csproj",
+        "*.fsproj",
+        "*.sln"
+      ],
+      "configuration": {
+        "type": "coreclr",
+        "request": "launch",
+        "preLaunchTask": "dotnet build",
+        "program": "${workspaceFolder}/bin/Debug/net8.0/${workspaceFolderBasename}.dll",
+        "args": [],
+        "cwd": "${workspaceFolder}",
+        "stopAtEntry": false
+      }
+    },
+    {
+      "id": "dotnet.attach",
+      "category": ".NET",
+      "name": ".NET: Attach to Process",
+      "description": "Attaches netcoredbg to a running .NET process picked at start.",
+      "languages": [
+        "cs",
+        "fs"
+      ],
+      "configuration": {
+        "type": "coreclr",
+        "request": "attach",
+        "processId": "${command:pickProcess}"
+      }
+    },
+    {
+      "id": "dart.file",
+      "category": "Dart & Flutter",
+      "name": "Dart: Current File",
+      "description": "Runs or debugs the Dart file open in the editor with dart debug_adapter.",
+      "languages": [
+        "dart"
+      ],
+      "markers": [
+        "pubspec.yaml"
+      ],
+      "configuration": {
+        "type": "dart",
+        "request": "launch",
+        "program": "${file}",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "flutter.app",
+      "category": "Dart & Flutter",
+      "name": "Flutter: App",
+      "description": "Runs or debugs lib/main.dart on the default device with flutter debug_adapter.",
+      "languages": [
+        "dart"
+      ],
+      "markers": [
+        "pubspec.yaml"
+      ],
+      "configuration": {
+        "type": "flutter",
+        "request": "launch",
+        "program": "lib/main.dart",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "ocaml.bytecode",
+      "category": "OCaml",
+      "name": "OCaml: Bytecode Program (earlybird)",
+      "description": "Builds with dune, then debugs a bytecode executable with ocamlearlybird. The dune stanza needs (modes byte exe).",
+      "languages": [
+        "ml"
+      ],
+      "markers": [
+        "dune-project"
+      ],
+      "configuration": {
+        "type": "ocamlearlybird",
+        "request": "launch",
+        "preLaunchTask": "dune build",
+        "program": "${workspaceFolder}/_build/default/bin/main.bc",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "tools.command",
+      "category": "Tools",
+      "name": "Command",
+      "description": "Runs any program with arguments, environment and a working directory (run only).",
+      "configuration": {
+        "type": "command",
+        "request": "launch",
+        "program": "",
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "tools.shell",
+      "category": "Tools",
+      "name": "Shell Script",
+      "description": "Runs the open shell script with bash (run only).",
+      "languages": [
+        "sh",
+        "bash"
+      ],
+      "configuration": {
+        "type": "command",
+        "request": "launch",
+        "program": "bash",
+        "args": [
+          "${file}"
+        ],
+        "cwd": "${fileDir}"
+      }
+    },
+    {
+      "id": "tools.make",
+      "category": "Tools",
+      "name": "make: Target",
+      "description": "Runs a make target (run only). Change the target in Arguments.",
+      "markers": [
+        "Makefile",
+        "makefile"
+      ],
+      "configuration": {
+        "type": "command",
+        "request": "launch",
+        "program": "make",
+        "args": [
+          "all"
+        ],
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "id": "tools.compose",
+      "category": "Tools",
+      "name": "Docker Compose: Up",
+      "description": "Builds and starts the services in docker-compose.yml (run only).",
+      "markers": [
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        "compose.yml",
+        "compose.yaml"
+      ],
+      "configuration": {
+        "type": "command",
+        "request": "launch",
+        "program": "docker",
+        "args": [
+          "compose",
+          "up",
+          "--build"
+        ],
+        "cwd": "${workspaceFolder}"
+      }
+    }
+  ]
+}

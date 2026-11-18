@@ -1,3 +1,5 @@
+#include "applicationstylesheet.h"
+#include "deferredrestyle.h"
 #include "mainwindow_internal.h"
 #include "paneltypography.h"
 #include "workspaceicons.h"
@@ -408,7 +410,9 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "}"
 
       "QHeaderView::section { "
-      "background-color: " + surfaceColor + "; "
+      "background-color: " +
+      surfaceColor +
+      "; "
       "color: " +
       secondaryText +
       "; "
@@ -1006,7 +1010,8 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
       "}";
 
   qApp->setPalette(ThemePalette::build(themeDefinition));
-  qApp->setStyleSheet(styleSheet);
+  // Per window, not qApp->setStyleSheet: see ApplicationStyleSheet.
+  ApplicationStyleSheet::instance().apply(styleSheet, this);
   const auto chromeIcon = [&](WorkspaceIcons::Glyph glyph) {
     return WorkspaceIcons::icon(
         glyph, ColorContrast::ensure(tc.textSecondary, QColor(surfaceColor)));
@@ -1016,72 +1021,128 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
   ui->debugButton->setIcon(chromeIcon(WorkspaceIcons::Glyph::Debug));
   ui->testButton->setIcon(chromeIcon(WorkspaceIcons::Glyph::Tests));
   ui->magicButton->setIcon(chromeIcon(WorkspaceIcons::Glyph::Format));
-  updateAllTextAreas(&TextArea::setFont, settings.mainFont);
+  // Editors in background tabs catch up when their tab is opened; with many
+  // files open this is most of the work.
+  const QFont editorFont = settings.mainFont;
+  for (LightpadTabWidget *tabWidget : allTabWidgets()) {
+    for (TextArea *textArea : tabWidget->findChildren<TextArea *>()) {
+      DeferredRestyle::apply(
+          textArea, QStringLiteral("font"),
+          [textArea, editorFont] { textArea->setFont(editorFont); });
+    }
+  }
 
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     applyTabWidgetTheme(tabWidget);
   }
   if (terminalWidget) {
-    terminalWidget->applyTheme(theme);
+    DeferredRestyle::apply(
+        terminalWidget, QStringLiteral("theme"),
+        [w = terminalWidget, theme] { w->applyTheme(theme); });
   }
 
+  // Hidden popups and panels are restyled when they are next shown: a
+  // closed Debug or Database dock is hundreds of widgets, and styling it now
+  // would also make every later theme switch re-polish it.
+  const auto deferTheme = [](QWidget *widget, std::function<void()> update) {
+    DeferredRestyle::apply(widget, QStringLiteral("theme"), std::move(update));
+  };
   if (commandPalette) {
-    commandPalette->applyTheme(themeDefinition);
+    deferTheme(commandPalette, [w = commandPalette, themeDefinition] {
+      w->applyTheme(themeDefinition);
+    });
   }
   if (goToLineDialog) {
-    goToLineDialog->applyTheme(themeDefinition);
+    deferTheme(goToLineDialog, [w = goToLineDialog, themeDefinition] {
+      w->applyTheme(themeDefinition);
+    });
   }
   if (goToSymbolDialog) {
-    goToSymbolDialog->applyTheme(themeDefinition);
+    deferTheme(goToSymbolDialog, [w = goToSymbolDialog, themeDefinition] {
+      w->applyTheme(themeDefinition);
+    });
   }
   if (fileQuickOpen) {
-    fileQuickOpen->applyTheme(themeDefinition);
+    deferTheme(fileQuickOpen, [w = fileQuickOpen, themeDefinition] {
+      w->applyTheme(themeDefinition);
+    });
   }
   if (recentFilesDialog) {
-    recentFilesDialog->applyTheme(themeDefinition);
+    deferTheme(recentFilesDialog, [w = recentFilesDialog, themeDefinition] {
+      w->applyTheme(themeDefinition);
+    });
   }
   if (breadcrumbWidget) {
-    breadcrumbWidget->applyTheme(themeDefinition);
+    deferTheme(breadcrumbWidget, [w = breadcrumbWidget, themeDefinition] {
+      w->applyTheme(themeDefinition);
+    });
   }
   if (problemsPanel) {
-    problemsPanel->applyTheme(theme);
+    deferTheme(problemsPanel,
+               [w = problemsPanel, theme] { w->applyTheme(theme); });
   }
   if (sourceControlPanel) {
-    sourceControlPanel->applyTheme(theme);
+    deferTheme(sourceControlPanel,
+               [w = sourceControlPanel, theme] { w->applyTheme(theme); });
   }
   if (conflictCenterPanel) {
-    conflictCenterPanel->applyTheme(theme);
+    deferTheme(conflictCenterPanel,
+               [w = conflictCenterPanel, theme] { w->applyTheme(theme); });
   }
+  // Inspection panels set their own style sheets, so their font has to be
+  // applied again after the theme.
+  const QFont inspectionFont = settings.mainFont;
   if (debugPanel) {
-    debugPanel->applyTheme(theme);
+    deferTheme(debugPanel, [w = debugPanel, theme, inspectionFont] {
+      w->applyTheme(theme);
+      w->setContentFont(inspectionFont);
+    });
   }
   if (testPanel) {
-    testPanel->applyTheme(theme);
+    deferTheme(testPanel, [w = testPanel, theme, inspectionFont] {
+      w->applyTheme(theme);
+      w->setContentFont(inspectionFont);
+    });
   }
   if (databasePanel) {
-    databasePanel->applyTheme(theme);
+    deferTheme(databasePanel, [w = databasePanel, theme, inspectionFont] {
+      w->applyTheme(theme);
+      w->setContentFont(inspectionFont);
+    });
   }
   restyleStatusBarItems();
   for (StyledDialog *dialog : findChildren<StyledDialog *>()) {
     if (dialog->isVisible())
       dialog->applyTheme(theme);
   }
-  updateInspectionFonts();
+  for (QDockWidget *dock : {debugDock, databaseDock, testDock}) {
+    if (dock && dock->titleBarWidget()) {
+      DeferredRestyle::apply(dock->titleBarWidget(), QStringLiteral("font"),
+                             [bar = dock->titleBarWidget(), inspectionFont] {
+                               PanelTypography::apply(bar, inspectionFont);
+                             });
+    }
+  }
 
   for (LightpadTabWidget *tabWidget : allTabWidgets()) {
     for (int i = 0; i < tabWidget->count(); i++) {
-      auto page = tabWidget->getPage(i);
-      if (page) {
-        page->applyTheme(themeDefinition);
+      if (auto page = tabWidget->getPage(i)) {
+        DeferredRestyle::apply(
+            page, QStringLiteral("theme"),
+            [page, themeDefinition] { page->applyTheme(themeDefinition); });
       }
     }
     for (ConflictResolverView *view :
          tabWidget->findChildren<ConflictResolverView *>()) {
-      view->applyTheme(theme);
+      DeferredRestyle::apply(view, QStringLiteral("theme"),
+                             [view, theme] { view->applyTheme(theme); });
+    }
+    for (TextArea *textArea : tabWidget->findChildren<TextArea *>()) {
+      DeferredRestyle::apply(
+          textArea, QStringLiteral("theme"),
+          [textArea, theme] { textArea->applyTheme(theme); });
     }
   }
-
-  updateAllTextAreas(&TextArea::applyTheme, theme);
   setScanlineEffectEnabled(themeDefinition.ui.scanlineEffect);
 
   if (m_globalSettingsLoaded && !m_restoringSession) {
@@ -1090,14 +1151,22 @@ void MainWindow::setTheme(const ThemeDefinition &requestedTheme) {
 }
 
 void MainWindow::updateInspectionFonts() {
+  const QFont font = settings.mainFont;
+  const auto deferFont = [](QWidget *widget, std::function<void()> update) {
+    DeferredRestyle::apply(widget, QStringLiteral("font"), std::move(update));
+  };
   if (debugPanel)
-    debugPanel->setContentFont(settings.mainFont);
+    deferFont(debugPanel, [w = debugPanel, font] { w->setContentFont(font); });
   if (databasePanel)
-    databasePanel->setContentFont(settings.mainFont);
+    deferFont(databasePanel,
+              [w = databasePanel, font] { w->setContentFont(font); });
   if (testPanel)
-    testPanel->setContentFont(settings.mainFont);
+    deferFont(testPanel, [w = testPanel, font] { w->setContentFont(font); });
   for (QDockWidget *dock : {debugDock, databaseDock, testDock}) {
-    if (dock && dock->titleBarWidget())
-      PanelTypography::apply(dock->titleBarWidget(), settings.mainFont);
+    if (dock && dock->titleBarWidget()) {
+      deferFont(dock->titleBarWidget(), [bar = dock->titleBarWidget(), font] {
+        PanelTypography::apply(bar, font);
+      });
+    }
   }
 }

@@ -74,6 +74,37 @@ public:
     return config;
   }
 
+  RunCommand
+  runCommand(const DebugConfiguration &configuration) const override {
+    RunCommand command = AbstractDebugAdapter::runCommand(configuration);
+    if (configuration.request.compare("attach", Qt::CaseInsensitive) == 0) {
+      return command;
+    }
+    command.error.clear();
+    QString runtime =
+        configuration.adapterConfig.value("runtimeExecutable").toString();
+    if (runtime.trimmed().isEmpty()) {
+      runtime = preferredRuntimeExecutable();
+    }
+    command.program = runtime.trimmed().isEmpty() ? QStringLiteral("node")
+                                                  : runtime.trimmed();
+    command.arguments.clear();
+    for (const QJsonValue &arg :
+         configuration.adapterConfig.value("runtimeArgs").toArray()) {
+      command.arguments << arg.toString();
+    }
+    if (!configuration.program.isEmpty()) {
+      command.arguments << configuration.program;
+    } else if (command.arguments.isEmpty()) {
+      command.error =
+          QStringLiteral("Set the script to run, or runtime arguments such as "
+                         "\"run-script start\".");
+      return command;
+    }
+    command.arguments << configuration.args;
+    return command;
+  }
+
   QJsonObject createAttachConfig(int processId, const QString &host,
                                  int port) const override {
     QJsonObject config;

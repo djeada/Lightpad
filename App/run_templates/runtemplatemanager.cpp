@@ -208,6 +208,9 @@ RunTemplate RunTemplateManager::parseTemplate(const QJsonObject &obj) const {
   for (const QJsonValue &ext : extArray) {
     tmpl.extensions.append(ext.toString());
   }
+  for (const QJsonValue &ext : obj.value("defaultFor").toArray()) {
+    tmpl.defaultFor.append(ext.toString());
+  }
 
   QJsonArray argsArray = obj.value("args").toArray();
   for (const QJsonValue &arg : argsArray) {
@@ -218,6 +221,7 @@ RunTemplate RunTemplateManager::parseTemplate(const QJsonObject &obj) const {
   for (auto it = envObj.begin(); it != envObj.end(); ++it) {
     tmpl.env[it.key()] = it.value().toString();
   }
+  tmpl.debug = obj.value("debug").toObject();
 
   return tmpl;
 }
@@ -239,14 +243,18 @@ QList<RunTemplate> RunTemplateManager::getAllTemplates() const {
 QList<RunTemplate>
 RunTemplateManager::getTemplatesForExtension(const QString &extension) const {
   QList<RunTemplate> result;
-  QString ext = extension.toLower();
-  if (ext.startsWith('.')) {
-    ext = ext.mid(1);
-  }
+  const QString exact =
+      extension.startsWith('.') ? extension.mid(1) : extension;
+  const QString ext = exact.toLower();
 
   for (const RunTemplate &tmpl : m_templates) {
     for (const QString &templateExt : tmpl.extensions) {
-      if (templateExt.toLower() == ext) {
+      // An extension spelled with capitals is case-sensitive: ".C" is C++,
+      // ".c" is C.
+      const bool matches = templateExt == templateExt.toLower()
+                               ? templateExt == ext
+                               : templateExt == exact;
+      if (matches) {
         result.append(tmpl);
         break;
       }
@@ -517,8 +525,27 @@ bool RunTemplateManager::saveAssignments() const {
   return true;
 }
 
+RunTemplateManager::AssignmentPreview::AssignmentPreview(
+    const QString &filePath, const FileTemplateAssignment &assignment) {
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.m_previewActive = true;
+  manager.m_previewFilePath = filePath;
+  manager.m_previewAssignment = assignment;
+  manager.m_previewAssignment.filePath = filePath;
+}
+
+RunTemplateManager::AssignmentPreview::~AssignmentPreview() {
+  RunTemplateManager &manager = RunTemplateManager::instance();
+  manager.m_previewActive = false;
+  manager.m_previewFilePath.clear();
+  manager.m_previewAssignment = FileTemplateAssignment();
+}
+
 FileTemplateAssignment
 RunTemplateManager::getAssignmentForFile(const QString &filePath) const {
+  if (m_previewActive && filePath == m_previewFilePath) {
+    return m_previewAssignment;
+  }
 
   loadAssignments();
 
@@ -633,15 +660,19 @@ RunTemplateManager::buildCommand(const QString &filePath,
       tmpl.command, tmpl.args);
   QStringList args;
   if (scriptIndex >= 0) {
-    QStringList injection;
-    for (const QString &f : assignment.compilerFlags) {
-      injection.append(f);
-    }
-    for (const QString &a : assignment.customArgs) {
-      injection.append(a);
-    }
+    // Shell templates usually compile and then run ("cc ... && ./prog").
+    // Extra sources and compiler flags belong to the first command, program
+    // arguments to the last one.
+    QStringList buildInjection;
     for (const QString &s : assignment.sourceFiles) {
-      injection.append(PythonProjectEnvironment::shellQuote(s));
+      buildInjection.append(PythonProjectEnvironment::shellQuote(s));
+    }
+    for (const QString &f : assignment.compilerFlags) {
+      buildInjection.append(f);
+    }
+    QStringList programArguments;
+    for (const QString &a : assignment.customArgs) {
+      programArguments.append(PythonProjectEnvironment::shellQuote(a));
     }
 
     for (int i = 0; i < tmpl.args.size(); ++i) {
@@ -653,15 +684,17 @@ RunTemplateManager::buildCommand(const QString &filePath,
       }
 
       QString shellCmd = tmpl.args.at(i);
-      if (!injection.isEmpty()) {
-        QString extra = " " + injection.join(" ");
-
-        int andIdx = shellCmd.indexOf("&&");
+      if (!buildInjection.isEmpty()) {
+        const QString extra = " " + buildInjection.join(" ");
+        const int andIdx = shellCmd.indexOf("&&");
         if (andIdx > 0) {
           shellCmd.insert(andIdx, extra + " ");
         } else {
           shellCmd.append(extra);
         }
+      }
+      if (!programArguments.isEmpty()) {
+        shellCmd.append(" " + programArguments.join(" "));
       }
       args.append(PythonProjectEnvironment::substituteShellVariables(
           shellCmd, variables));
@@ -829,6 +862,12 @@ RunTemplateManager::resolveTemplateIdForFile(const QString &filePath,
   if (!projectTemplate.isEmpty() &&
       getTemplateById(projectTemplate).isValid()) {
     return projectTemplate;
+  }
+  const QString exactSuffix = QFileInfo(filePath).suffix();
+  for (const RunTemplate &tmpl : m_templates) {
+    if (!exactSuffix.isEmpty() && tmpl.defaultFor.contains(exactSuffix)) {
+      return tmpl.id;
+    }
   }
   if (!canonicalLanguageId.isEmpty()) {
     QList<RunTemplate> languageTemplates =

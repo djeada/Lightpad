@@ -1,4 +1,5 @@
 #include "pythonprojectenvironment.h"
+#include "../core/pathvariables.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -338,23 +339,23 @@ QMap<QString, QString> PythonProjectEnvironment::activationEnvironment(
   return env;
 }
 
+namespace {
+bool referencesPythonVariable(const QString &input) {
+  return input.contains(QLatin1String("${python")) ||
+         input.contains(QLatin1String("${venv")) ||
+         input.contains(QLatin1String("${requirementsFile}"));
+}
+} // namespace
+
 QMap<QString, QString> PythonProjectEnvironment::variables(
     const QString &workspaceFolder, const QString &filePath,
     const QString &workingDirectory,
     const PythonEnvironmentPreference &preference) {
-  const QFileInfo fileInfo(filePath);
-  const QString workspaceRoot =
-      workspaceRootForContext(workspaceFolder, filePath, workingDirectory);
+  QMap<QString, QString> vars = PathVariables::forContext(
+      workspaceRootForContext(workspaceFolder, filePath, workingDirectory),
+      filePath);
   const PythonEnvironmentInfo info =
       resolve(preference, workspaceFolder, filePath, workingDirectory);
-
-  QMap<QString, QString> vars;
-  vars.insert("file", filePath);
-  vars.insert("fileDir", fileInfo.absoluteDir().path());
-  vars.insert("fileBasename", fileInfo.fileName());
-  vars.insert("fileBasenameNoExt", fileInfo.completeBaseName());
-  vars.insert("fileExt", fileInfo.suffix());
-  vars.insert("workspaceFolder", workspaceRoot);
   vars.insert("python", info.interpreter);
   vars.insert("pythonInterpreter", info.interpreter);
   vars.insert("venv", info.venvPath);
@@ -367,18 +368,20 @@ QString PythonProjectEnvironment::substituteVariables(
     const QString &input, const QString &workspaceFolder,
     const QString &filePath, const QString &workingDirectory,
     const PythonEnvironmentPreference &preference) {
-  if (input.isEmpty()) {
+  if (!input.contains(QLatin1String("${"))) {
     return input;
   }
 
-  QString result = input;
+  // Resolving the Python environment probes the file system, so only do it
+  // when the value actually refers to it.
   const QMap<QString, QString> vars =
-      variables(workspaceFolder, filePath, workingDirectory, preference);
-  for (auto it = vars.constBegin(); it != vars.constEnd(); ++it) {
-    result.replace("${" + it.key() + "}", it.value());
-  }
-
-  return result;
+      referencesPythonVariable(input)
+          ? variables(workspaceFolder, filePath, workingDirectory, preference)
+          : PathVariables::forContext(workspaceRootForContext(workspaceFolder,
+                                                              filePath,
+                                                              workingDirectory),
+                                      filePath);
+  return PathVariables::expand(input, vars);
 }
 
 QString PythonProjectEnvironment::shellQuote(const QString &value) {

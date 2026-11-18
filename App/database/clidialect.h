@@ -50,6 +50,18 @@ public:
     return {};
   }
 
+  // Encryption options, which differ between client flavours (mysql vs
+  // mariadb). `mariaDb` is true for MariaDB's client.
+  virtual QStringList sslArguments(const DbConnectionProfile &profile,
+                                   bool mariaDb) const {
+    Q_UNUSED(profile)
+    Q_UNUSED(mariaDb)
+    return {};
+  }
+
+  // True when `program` is MariaDB's client (also when installed as mysql).
+  static bool isMariaDbClient(const QString &program);
+
   virtual QString startupError(const QString &err, const QString &out) const;
 };
 

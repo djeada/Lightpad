@@ -153,7 +153,10 @@ public:
   void setInlineBlameEnabled(bool enabled);
   bool isInlineBlameEnabled() const;
 
+  // Shows the stopped frame's variable values after the lines of its
+  // function that use them, from the function's first line to the stop line.
   void setDebugInlineValues(const QString &filePath, int stopLine,
+                            const QString &functionName,
                             const QHash<QString, QString> &values);
   void clearDebugInlineValues();
   bool hasDebugInlineValues() const { return !m_debugInlineValues.isEmpty(); }
@@ -237,6 +240,7 @@ private:
   int m_debugExecutionLine;
   QString m_debugInlineFile;
   int m_debugInlineStopLine = 0;
+  int m_debugInlineFirstLine = 0;
   QHash<QString, QString> m_debugInlineValues;
 
   QString diagnosticMessageAt(const QPoint &viewportPos) const;

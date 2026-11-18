@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/run_templates">
         <file>run_templates.json</file>
+        <file>launch_templates.json</file>
     </qresource>
 </RCC>

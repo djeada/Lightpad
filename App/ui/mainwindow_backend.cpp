@@ -40,7 +40,7 @@ void MainWindow::openBackendEnvironment(const PythonBackendProject &project) {
   connect(dialog, &PythonEnvironmentDialog::configurationSaved, this, [this]() {
     invalidateRunTargetCache();
     updatePythonEnvironmentLabel();
-    refreshRunTargetButton();
+    refreshLaunchButtons();
   });
   dialog->show();
 }

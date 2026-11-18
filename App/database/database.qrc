@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/database">
+        <file>connection_templates.json</file>
+    </qresource>
+</RCC>

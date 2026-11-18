@@ -242,12 +242,6 @@ add_executable(test_runtemplatemanager
     ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
     ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
     ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
-    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/runtemplateselector.cpp
-    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
-    ${CMAKE_SOURCE_DIR}/App/ui/widgets/pythonenvironmentwidget.cpp
-    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
-    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
-    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
     ${RUN_TEMPLATE_RESOURCES}
 )
@@ -563,6 +557,8 @@ add_executable(test_dap
     ${CMAKE_SOURCE_DIR}/App/dap/adapters/lldbdebugadapter.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/adapters/godebugadapter.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/adapters/rustdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/genericdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/dap.qrc
     ${CMAKE_SOURCE_DIR}/App/dap/breakpointmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugconfiguration.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/watchmanager.cpp
@@ -572,7 +568,7 @@ add_executable(test_dap
     ${CMAKE_SOURCE_DIR}/App/ui/panels/debugconcurrencypanel.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/debugvalueformatter.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/panels/debugvalueinspector.cpp
-    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/debugconfigurationdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/breakpointeditordialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
     ${CMAKE_SOURCE_DIR}/App/ui/widgets/pythonenvironmentwidget.cpp
@@ -631,6 +627,8 @@ add_executable(test_dap_integration
     ${CMAKE_SOURCE_DIR}/App/dap/adapters/lldbdebugadapter.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/adapters/godebugadapter.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/adapters/rustdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/genericdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/dap.qrc
     ${CMAKE_SOURCE_DIR}/App/dap/breakpointmanager.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/debugconfiguration.cpp
     ${CMAKE_SOURCE_DIR}/App/dap/watchmanager.cpp
@@ -3058,29 +3056,73 @@ target_compile_definitions(test_problemspanel PRIVATE QT_DEPRECATED_WARNINGS)
 
 add_test(NAME ProblemsPanelTests COMMAND test_problemspanel)
 
-# RunConfiguration test executable
-add_executable(test_runconfiguration
-    unit/test_runconfiguration.cpp
-    ${CMAKE_SOURCE_DIR}/App/run_templates/runconfiguration.cpp
+# Launching: variables, launch templates, run/debug planning, the shared
+# launch.json store and the Run and Debug Configurations dialog.
+qt_add_resources(LAUNCH_TEMPLATE_RESOURCES ${CMAKE_SOURCE_DIR}/App/run_templates/run_templates.qrc)
+
+add_executable(test_launchconfigurations
+    unit/test_launchconfigurations.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonprojectenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/App/python/pythonbackendproject.cpp
+    ${CMAKE_SOURCE_DIR}/App/build/cmakeproject.cpp
+    ${CMAKE_SOURCE_DIR}/App/run_templates/runtemplatemanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/run_templates/runtargetresolver.cpp
+    ${CMAKE_SOURCE_DIR}/App/run_templates/launchplanner.cpp
+    ${CMAKE_SOURCE_DIR}/App/run_templates/launchtemplatecatalog.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testconfiguration.cpp
+    ${CMAKE_SOURCE_DIR}/App/test_templates/testdiscovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/dapclient.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/expressiontranslator.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/debugadapterregistry.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/adapterutils.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/pythonruntime.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/pythondebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/nodedebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/gdbdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/lldbdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/godebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/rustdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/adapters/genericdebugadapter.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/dap.qrc
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/breakpointeditordialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/breakpointmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/watchmanager.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/debugconfiguration.cpp
+    ${CMAKE_SOURCE_DIR}/App/dap/debugsettings.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/launchconfigurationsdialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/launchtemplategallery.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/keyvaluetable.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/styleddialog.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/dialogs/themedmessagebox.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/widgets/pythonenvironmentwidget.cpp
+    ${CMAKE_SOURCE_DIR}/App/ui/uistylehelper.cpp
+    ${CMAKE_SOURCE_DIR}/App/settings/theme.cpp
     ${CMAKE_SOURCE_DIR}/App/core/logging/logger.cpp
+    ${LAUNCH_TEMPLATE_RESOURCES}
 )
 
-target_include_directories(test_runconfiguration PRIVATE
+target_include_directories(test_launchconfigurations PRIVATE
     ${CMAKE_SOURCE_DIR}/App
-    ${CMAKE_SOURCE_DIR}/App/run_templates
+    ${CMAKE_SOURCE_DIR}/App/dap
 )
 
-target_link_libraries(test_runconfiguration
+target_link_libraries(test_launchconfigurations
     PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    Qt6::Network
     Qt6::Test
 )
 
-target_compile_definitions(test_runconfiguration PRIVATE QT_DEPRECATED_WARNINGS)
+target_compile_definitions(test_launchconfigurations PRIVATE QT_DEPRECATED_WARNINGS)
 
-add_test(NAME RunConfigurationTests COMMAND test_runconfiguration)
+set_target_properties(test_launchconfigurations PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/bin"
+)
+
+add_test(NAME LaunchConfigurationsTests COMMAND test_launchconfigurations)
+set_tests_properties(LaunchConfigurationsTests PROPERTIES TIMEOUT 120)
 
 # DocumentSymbols test executable
 add_executable(test_documentsymbols
@@ -3298,6 +3340,10 @@ set(DATABASE_CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/App/database/connectionstore.cpp
     ${CMAKE_SOURCE_DIR}/App/database/queryhistory.cpp
     ${CMAKE_SOURCE_DIR}/App/database/dockerdiscovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/dbconnectionurl.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/dbconnectiontemplates.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/dbprojectdiscovery.cpp
+    ${CMAKE_SOURCE_DIR}/App/database/database.qrc
     ${CMAKE_SOURCE_DIR}/App/database/resultexporter.cpp
     ${CMAKE_SOURCE_DIR}/App/database/columnprofiler.cpp
     ${CMAKE_SOURCE_DIR}/App/database/databasemanager.cpp
@@ -3308,7 +3354,7 @@ set(DATABASE_CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/App/database/resultedit.cpp
 )
 
-foreach(db_test test_sqlstatementsplitter test_databasecore test_databaselive test_databasetools)
+foreach(db_test test_sqlstatementsplitter test_databasecore test_databaselive test_databasetools test_databaseconnections)
     add_executable(${db_test}
         unit/${db_test}.cpp
         ${DATABASE_CORE_SOURCES}
@@ -3331,6 +3377,7 @@ target_sources(test_databasecore PRIVATE
     ${CMAKE_SOURCE_DIR}/App/completion/providers/sqlcompletionprovider.cpp)
 add_test(NAME DatabaseCoreTests COMMAND test_databasecore)
 add_test(NAME DatabaseToolsTests COMMAND test_databasetools)
+add_test(NAME DatabaseConnectionsTests COMMAND test_databaseconnections)
 add_test(NAME DatabaseLiveTests COMMAND test_databaselive)
 set_tests_properties(DatabaseLiveTests PROPERTIES TIMEOUT 120)
 
@@ -3416,7 +3463,7 @@ set(TEST_LIST
     TestRunManagerTests
     TestPanelTests
     ProblemsPanelTests
-    RunConfigurationTests
+    LaunchConfigurationsTests
     TextTransformsTests
     CodeFoldingTests
     MultiCursorTests

@@ -1,10 +1,12 @@
 #include "debugpanel.h"
+#include "../../dap/debugoutputfilter.h"
 #include "../paneltypography.h"
 
 #include "../../core/logging/logger.h"
 #include "../../dap/debugadapterregistry.h"
 #include "../../dap/debugsession.h"
 #include "../../dap/debugsettings.h"
+#include "../dialogs/breakpointeditordialog.h"
 #include "../dialogs/styleddialog.h"
 #include "debugconcurrencypanel.h"
 #include "debugglyphs.h"
@@ -236,6 +238,19 @@ void applyTreePalette(QTreeWidget *tree, const Theme &theme) {
   tree->setPalette(palette);
 }
 
+// What the editor shows after a line for a variable: its value, but just the
+// type for objects whose value is only an address
+// ("<__main__.Account object at 0x7f...>" becomes "Account").
+QString inlineValueText(const DapVariable &var) {
+  static const QRegularExpression objectRepr(
+      QStringLiteral("^<([\\w.]+) object at 0x[0-9a-fA-F]+>$"));
+  const auto match = objectRepr.match(var.value.trimmed());
+  if (match.hasMatch()) {
+    return match.captured(1).section(QLatin1Char('.'), -1);
+  }
+  return DebugValueFormatter::summary(var.value, 96);
+}
+
 QList<QPair<QString, QString>> parseInfoLocalsOutput(const QString &raw) {
   QList<QPair<QString, QString>> entries;
   QString currentName;
@@ -404,7 +419,8 @@ void DebugPanel::applyTheme(const Theme &theme) {
               "  max-width: 1px;"
               "}"
 
-              "QToolButton#debugToolbarButton {"
+              "QToolButton#debugToolbarButton, "
+              "QToolButton#debugProgramIoButton {"
               "  color: {fg};"
               "  background: transparent;"
               "  border: 1px solid transparent;"
@@ -414,13 +430,18 @@ void DebugPanel::applyTheme(const Theme &theme) {
               "  font-weight: 500;"
               "  text-align: left;"
               "}"
-              "QToolButton#debugToolbarButton:hover {"
+              "QToolButton#debugToolbarButton:hover, "
+              "QToolButton#debugProgramIoButton:hover {"
               "  background: {focusSurface};"
+              "}"
+              "QToolButton#debugProgramIoButton {"
+              "  border-color: {shellBorder};"
               "}"
               "QToolButton#debugToolbarButton:pressed {"
               "  background: {accentSoft};"
               "}"
-              "QToolButton#debugToolbarButton:disabled {"
+              "QToolButton#debugToolbarButton:disabled, "
+              "QToolButton#debugProgramIoButton:disabled {"
               "  color: {disabledText};"
               "  background: transparent;"
               "  border-color: transparent;"
@@ -838,17 +859,6 @@ void DebugPanel::setupUI() {
   }
   tabBarLayout->addStretch(1);
 
-  m_programIoButton = new QToolButton(m_inspectorTabBar);
-  m_programIoButton->setObjectName("debugProgramIoButton");
-  m_programIoButton->setText(tr("Program I/O"));
-  m_programIoButton->setToolTip(
-      tr("Open the program terminal to read output and type input"));
-  m_programIoButton->setCursor(Qt::PointingHandCursor);
-  m_programIoButton->setEnabled(false);
-  connect(m_programIoButton, &QToolButton::clicked, this,
-          &DebugPanel::showProgramIoRequested);
-  tabBarLayout->insertWidget(0, m_programIoButton);
-
   auto *tabScroll = new QScrollArea(m_inspectorShell);
   tabScroll->setObjectName("debugInspectorTabScroll");
   tabScroll->setFrameShape(QFrame::NoFrame);
@@ -1092,14 +1102,18 @@ void DebugPanel::setupToolbar() {
   m_threadSelector->setPlaceholderText(tr("No threads"));
   m_threadSelector->setSizeAdjustPolicy(QComboBox::AdjustToContents);
   m_threadSelector->setEnabled(false);
+  // Only shown when there is a choice to make (several threads).
+  m_threadSelector->setVisible(false);
   m_threadSelector->setCursor(Qt::PointingHandCursor);
   connect(m_threadSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &DebugPanel::onThreadSelected);
 
   m_debugStatusLabel = new QLabel(tr("Ready"), this);
   m_debugStatusLabel->setObjectName("debugStatusLabel");
-  m_debugStatusLabel->setMinimumWidth(0);
-  m_debugStatusLabel->setWordWrap(true);
+  // One line, elided; it never wraps into a tall pill in a narrow panel.
+  m_debugStatusLabel->setWordWrap(false);
+  m_debugStatusLabel->setSizePolicy(QSizePolicy::Minimum,
+                                    QSizePolicy::Preferred);
   m_debugStatusText = m_debugStatusLabel->text();
 
   m_debugStatusLabel->installEventFilter(this);
@@ -1117,6 +1131,8 @@ void DebugPanel::setupToolbar() {
   m_processSelector->setMaximumWidth(260);
   m_processSelector->setPlaceholderText(tr("No process"));
   m_processSelector->setEnabled(false);
+  // Only shown when several sessions (or child processes) run at once.
+  m_processSelector->setVisible(false);
   connect(m_processSelector, QOverload<int>::of(&QComboBox::activated), this,
           [this](int index) {
             const QString id = m_processSelector->itemData(index).toString();
@@ -1125,6 +1141,16 @@ void DebugPanel::setupToolbar() {
               setDapClient(session->client());
             }
           });
+  m_programIoButton = new QToolButton(metaGroup);
+  m_programIoButton->setObjectName("debugProgramIoButton");
+  m_programIoButton->setText(tr("Program I/O"));
+  m_programIoButton->setToolTip(
+      tr("Open the program's terminal to read its output and type input"));
+  m_programIoButton->setCursor(Qt::PointingHandCursor);
+  m_programIoButton->setEnabled(false);
+  connect(m_programIoButton, &QToolButton::clicked, this,
+          &DebugPanel::showProgramIoRequested);
+  metaLayout->addWidget(m_programIoButton);
   metaLayout->addWidget(m_processSelector);
   metaLayout->addWidget(m_threadSelector);
   metaLayout->addWidget(m_debugStatusLabel);
@@ -1386,7 +1412,7 @@ void DebugPanel::setupWatches() {
 void DebugPanel::setupBreakpoints() {
   m_breakpointsTree = new QTreeWidget(this);
   m_breakpointsTree->setObjectName("debugBreakpointsTree");
-  m_breakpointsTree->setHeaderLabels({tr(""), tr("Location"), tr("Condition")});
+  m_breakpointsTree->setHeaderLabels({tr(""), tr("Breakpoint"), tr("Details")});
   m_breakpointsTree->setRootIsDecorated(false);
   m_breakpointsTree->setSelectionMode(QAbstractItemView::SingleSelection);
   m_breakpointsTree->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -1492,10 +1518,12 @@ void DebugPanel::setupConsoleToolbar() {
   m_consoleFindInput->setClearButtonEnabled(true);
   m_consoleFindInput->setFixedHeight(UiMetrics::ControlHeight);
   m_consoleFindInput->setMinimumWidth(80);
-  m_consoleFindInput->setMaximumWidth(240);
+  m_consoleFindInput->setMaximumWidth(260);
   connect(m_consoleFindInput, &QLineEdit::returnPressed, this,
           [this]() { findInConsole(false); });
   layout->addWidget(m_consoleFindInput, 1);
+  // Search on the left, view toggles together on the right.
+  layout->addStretch(1);
 
   m_consoleFollowAction = new QAction(tr("Follow"), this);
   m_consoleFollowAction->setObjectName("debugConsoleFollowAction");
@@ -2345,6 +2373,7 @@ void DebugPanel::refreshProcessSelector() {
       m_processSelector->setCurrentIndex(m_processSelector->count() - 1);
   }
   m_processSelector->setEnabled(m_processSelector->count() > 0);
+  m_processSelector->setVisible(m_processSelector->count() > 1);
 }
 
 void DebugPanel::setDapClient(DapClient *client) {
@@ -2612,6 +2641,7 @@ void DebugPanel::clearSessionState() {
   m_concurrencyPanel->setFrameContext(m_dapClient, -1);
   m_threadSelector->clear();
   m_threadSelector->setEnabled(false);
+  m_threadSelector->setVisible(false);
   updateSectionSummaries();
 }
 
@@ -2620,14 +2650,15 @@ void DebugPanel::clearInlineValues() {
     return;
   }
   m_inlineValues.clear();
-  emit inlineValuesChanged(QString(), 0, {});
+  emit inlineValuesChanged(QString(), 0, QString(), {});
 }
 
 void DebugPanel::publishInlineValues() {
   for (const DapStackFrame &frame : std::as_const(m_stackFrames)) {
     if (frame.id == m_currentFrameId && !frame.source.path.isEmpty() &&
         frame.line > 0) {
-      emit inlineValuesChanged(frame.source.path, frame.line, m_inlineValues);
+      emit inlineValuesChanged(frame.source.path, frame.line, frame.name,
+                               m_inlineValues);
       return;
     }
   }
@@ -2670,7 +2701,7 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
   QString reasonText;
   switch (event.reason) {
   case DapStoppedReason::Breakpoint:
-    reasonText = tr("Breakpoint hit");
+    reasonText = tr("Paused on breakpoint");
     break;
   case DapStoppedReason::Step:
     reasonText = tr("Step completed");
@@ -2701,8 +2732,13 @@ void DebugPanel::onStopped(const DapStoppedEvent &event) {
                      : tr("Stopped: %1").arg(event.description);
   }
 
-  if (event.rawReason != QLatin1String("function call"))
-    appendConsoleLine(reasonText, consoleInfoColor());
+  // Steps are reported by the location pill alone; other stops are logged
+  // with where they happened once the stack trace arrives.
+  m_pendingStopMessage.clear();
+  if (event.reason != DapStoppedReason::Step &&
+      event.rawReason != QLatin1String("function call")) {
+    m_pendingStopMessage = reasonText;
+  }
 
   if (event.reason == DapStoppedReason::Exception && m_dapClient &&
       !m_dapClient->supportsExceptionInfoRequest()) {
@@ -2904,6 +2940,7 @@ void DebugPanel::onThreadsReceived(const QList<DapThread> &threads) {
   }
 
   m_threadSelector->setEnabled(!threads.isEmpty());
+  m_threadSelector->setVisible(threads.size() > 1);
   if (QAbstractItemView *popup = m_threadSelector->view()) {
     int widest = m_threadSelector->width();
     const QFontMetrics metrics(popup->font());
@@ -2999,6 +3036,18 @@ void DebugPanel::onStackTraceReceived(int threadId,
     }
 
     const DapStackFrame &activeFrame = frames.at(activeIndex);
+    if (!m_pendingStopMessage.isEmpty()) {
+      const DapStackFrame &top = frames.first();
+      QString where = top.name;
+      if (!top.source.name.isEmpty() && top.line > 0) {
+        where = tr("%1 · %2:%3").arg(top.name, top.source.name).arg(top.line);
+      }
+      appendConsoleLine(where.isEmpty()
+                            ? m_pendingStopMessage
+                            : tr("%1 in %2").arg(m_pendingStopMessage, where),
+                        consoleInfoColor());
+      m_pendingStopMessage.clear();
+    }
 
     m_callStackTree->blockSignals(true);
     m_callStackTree->setCurrentItem(m_callStackTree->topLevelItem(activeIndex));
@@ -3018,6 +3067,10 @@ void DebugPanel::onStackTraceReceived(int threadId,
     }
 
     WatchManager::instance().evaluateAll(activeFrame.id);
+  }
+  if (!m_pendingStopMessage.isEmpty()) {
+    appendConsoleLine(m_pendingStopMessage, consoleInfoColor());
+    m_pendingStopMessage.clear();
   }
 
   updateToolbarState();
@@ -3213,8 +3266,7 @@ void DebugPanel::onVariablesReceived(int variablesReference,
       for (const DapVariable &var : variables) {
         if (!var.name.isEmpty() && !var.value.isEmpty() &&
             !var.name.startsWith(QLatin1Char('['))) {
-          m_inlineValues.insert(var.name,
-                                DebugValueFormatter::summary(var.value, 96));
+          m_inlineValues.insert(var.name, inlineValueText(var));
         }
       }
       publishInlineValues();
@@ -3377,13 +3429,21 @@ void DebugPanel::onOutputReceived(const DapOutputEvent &event) {
     return;
   }
 
+  QString output = event.output;
+  if (event.category.isEmpty() || event.category == QLatin1String("console")) {
+    output = DebugOutputFilter::withoutAdapterChatter(output);
+    if (output.isEmpty()) {
+      return;
+    }
+  }
+
   QColor color = palette().color(QPalette::Text);
   if (event.category == "stderr") {
     color = consoleErrorColor();
   } else if (event.category == "important") {
     color = consoleInfoColor();
   }
-  appendConsoleLine(event.output, color);
+  appendConsoleLine(output, color);
 }
 
 void DebugPanel::onExceptionInfoReceived(int threadId,
@@ -3486,8 +3546,6 @@ void DebugPanel::onVariableItemExpanded(QTreeWidgetItem *item) {
 
 void DebugPanel::onBreakpointItemDoubleClicked(QTreeWidgetItem *item,
                                                int column) {
-  Q_UNUSED(column);
-
   if (!item) {
     return;
   }
@@ -3501,6 +3559,13 @@ void DebugPanel::onBreakpointItemDoubleClicked(QTreeWidgetItem *item,
   QString filePath = item->data(0, Qt::UserRole).toString();
   int line = item->data(0, Qt::UserRole + 1).toInt();
 
+  // Double-clicking the details edits them; anywhere else opens the line.
+  if (column == 2 && !filePath.isEmpty()) {
+    BreakpointEditorDialog::editAt(filePath, line,
+                                   BreakpointEditorDialog::Focus::Condition,
+                                   m_theme, this);
+    return;
+  }
   if (!filePath.isEmpty()) {
     emit locationClicked(filePath, line, 0);
   }
@@ -3647,11 +3712,12 @@ void DebugPanel::onBreakpointsContextMenuRequested(const QPoint &pos) {
         menu.addAction(breakpoint.enabled ? tr("Disable Breakpoint")
                                           : tr("Enable Breakpoint"));
     menu.addSeparator();
-    QAction *editConditionAction = menu.addAction(tr("Edit Condition..."));
-    QAction *editHitConditionAction = menu.addAction(tr("Edit Hit Count..."));
-    QAction *editLogpointAction = menu.addAction(tr("Edit Logpoint..."));
+    QAction *editAction = menu.addAction(tr("Edit Breakpoint..."));
     QAction *clearMetadataAction =
         menu.addAction(tr("Clear Condition and Logpoint"));
+    clearMetadataAction->setEnabled(!breakpoint.condition.isEmpty() ||
+                                    !breakpoint.hitCondition.isEmpty() ||
+                                    !breakpoint.logMessage.isEmpty());
     menu.addSeparator();
     QAction *removeAction = menu.addAction(tr("Remove Breakpoint"));
 
@@ -3672,42 +3738,10 @@ void DebugPanel::onBreakpointsContextMenuRequested(const QPoint &pos) {
       return;
     }
 
-    if (chosen == editConditionAction) {
-      bool ok = false;
-      const QString condition =
-          QInputDialog::getText(this, tr("Breakpoint Condition"),
-                                tr("Pause when expression is true:"),
-                                QLineEdit::Normal, breakpoint.condition, &ok);
-      if (ok) {
-        BreakpointManager::instance().setCondition(breakpointId,
-                                                   condition.trimmed());
-      }
-      return;
-    }
-
-    if (chosen == editHitConditionAction) {
-      bool ok = false;
-      const QString hitCondition = QInputDialog::getText(
-          this, tr("Breakpoint Hit Count"),
-          tr("Break after this hit count or expression:"), QLineEdit::Normal,
-          breakpoint.hitCondition, &ok);
-      if (ok) {
-        BreakpointManager::instance().setHitCondition(breakpointId,
-                                                      hitCondition.trimmed());
-      }
-      return;
-    }
-
-    if (chosen == editLogpointAction) {
-      bool ok = false;
-      const QString logMessage =
-          QInputDialog::getText(this, tr("Breakpoint Logpoint"),
-                                tr("Log message (use braces for expressions):"),
-                                QLineEdit::Normal, breakpoint.logMessage, &ok);
-      if (ok) {
-        BreakpointManager::instance().setLogMessage(breakpointId,
-                                                    logMessage.trimmed());
-      }
+    if (chosen == editAction) {
+      BreakpointEditorDialog::editAt(breakpoint.filePath, breakpoint.line,
+                                     BreakpointEditorDialog::Focus::Condition,
+                                     m_theme, this);
       return;
     }
 
@@ -3872,6 +3906,10 @@ void DebugPanel::refreshBreakpointList() {
   const QSignalBlocker blocker(m_breakpointsTree);
   m_breakpointsTree->clear();
 
+  const QColor breakpointColor = m_theme.debugBreakpointColor.isValid()
+                                     ? m_theme.debugBreakpointColor
+                                     : QColor("#e5534b");
+  const QColor disabledColor = consoleMutedColor();
   QList<Breakpoint> breakpoints =
       BreakpointManager::instance().allBreakpoints();
   std::sort(breakpoints.begin(), breakpoints.end(),
@@ -3911,11 +3949,23 @@ void DebugPanel::refreshBreakpointList() {
     item->setData(0, Qt::UserRole + 2, bp.id);
     item->setData(0, Qt::UserRole + 4, QStringLiteral("source"));
 
-    if (bp.verified) {
-      item->setIcon(0, style()->standardIcon(QStyle::SP_DialogApplyButton));
-    } else if (!bp.verificationMessage.isEmpty()) {
-      item->setIcon(0, style()->standardIcon(QStyle::SP_MessageBoxWarning));
+    // The checkbox enables the breakpoint; the marker shows its kind and
+    // whether the debugger bound it (filled) or not yet (ring).
+    const bool bound = bp.verified || !m_dapClient;
+    const DebugGlyphs::Marker marker =
+        bp.isLogpoint ? DebugGlyphs::Marker::Logpoint
+        : (!bp.condition.isEmpty() || !bp.hitCondition.isEmpty())
+            ? DebugGlyphs::Marker::Conditional
+            : DebugGlyphs::Marker::Line;
+    item->setIcon(
+        1, DebugGlyphs::breakpointMarker(
+               marker, bp.enabled ? breakpointColor : disabledColor, bound));
+    if (!bp.verificationMessage.isEmpty()) {
       item->setToolTip(0, bp.verificationMessage);
+      item->setToolTip(1, bp.verificationMessage);
+    } else if (!bound) {
+      item->setToolTip(0, tr("Not bound yet: the debugger has not found code "
+                             "for this line"));
     }
 
     if (!bp.verificationMessage.isEmpty()) {
@@ -3932,7 +3982,8 @@ void DebugPanel::refreshBreakpointList() {
     item->setFlags(item->flags() | Qt::ItemIsUserCheckable |
                    Qt::ItemIsSelectable | Qt::ItemIsEnabled);
     item->setCheckState(0, bp.enabled ? Qt::Checked : Qt::Unchecked);
-    item->setText(1, QString("ƒ %1").arg(bp.functionName));
+    item->setText(1, tr("%1()").arg(bp.functionName));
+    item->setToolTip(1, tr("Function breakpoint"));
     if (!bp.condition.isEmpty() || !bp.hitCondition.isEmpty()) {
       QStringList details;
       if (!bp.condition.isEmpty()) {
@@ -3945,7 +3996,9 @@ void DebugPanel::refreshBreakpointList() {
     }
     item->setData(0, Qt::UserRole + 2, bp.id);
     item->setData(0, Qt::UserRole + 4, QStringLiteral("function"));
-    item->setIcon(0, style()->standardIcon(QStyle::SP_CommandLink));
+    item->setIcon(1, DebugGlyphs::breakpointMarker(
+                         DebugGlyphs::Marker::Function,
+                         bp.enabled ? breakpointColor : disabledColor));
     m_breakpointsTree->addTopLevelItem(item);
   }
 
@@ -3956,13 +4009,13 @@ void DebugPanel::refreshBreakpointList() {
     item->setFlags(item->flags() | Qt::ItemIsUserCheckable |
                    Qt::ItemIsSelectable | Qt::ItemIsEnabled);
     item->setCheckState(0, bp.enabled ? Qt::Checked : Qt::Unchecked);
-    item->setText(
-        1, QString("\u25C6 %1")
-               .arg(bp.description.isEmpty() ? bp.dataId : bp.description));
-    item->setText(2, tr("data (%1)").arg(bp.accessType));
+    item->setText(1, bp.description.isEmpty() ? bp.dataId : bp.description);
+    item->setText(2, tr("when the value changes (%1)").arg(bp.accessType));
     item->setData(0, Qt::UserRole + 2, bp.id);
     item->setData(0, Qt::UserRole + 4, QStringLiteral("data"));
-    item->setIcon(0, style()->standardIcon(QStyle::SP_DialogApplyButton));
+    item->setIcon(1, DebugGlyphs::breakpointMarker(DebugGlyphs::Marker::Data,
+                                                   bp.enabled ? breakpointColor
+                                                              : disabledColor));
     m_breakpointsTree->addTopLevelItem(item);
   }
 
@@ -3983,12 +4036,18 @@ void DebugPanel::refreshBreakpointList() {
                                ? Qt::Checked
                                : Qt::Unchecked);
     item->setText(1, filter["label"].toString(filterId));
-    if (filter["supportsCondition"].toBool()) {
-      item->setText(2, tr("exception filter"));
-    }
+    item->setText(2, filter["description"].toString().isEmpty()
+                         ? tr("exceptions")
+                         : filter["description"].toString());
     item->setData(0, Qt::UserRole + 4, QStringLiteral("exception"));
     item->setData(0, Qt::UserRole + 5, filterId);
-    item->setIcon(0, style()->standardIcon(QStyle::SP_MessageBoxWarning));
+    const QColor warning = m_theme.warningColor.isValid() ? m_theme.warningColor
+                                                          : QColor("#d29922");
+    item->setIcon(1, DebugGlyphs::breakpointMarker(
+                         DebugGlyphs::Marker::Exception,
+                         enabledExceptionFilters.contains(filterId)
+                             ? warning
+                             : disabledColor));
     m_breakpointsTree->addTopLevelItem(item);
   }
 

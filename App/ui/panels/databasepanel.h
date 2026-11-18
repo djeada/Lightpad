@@ -51,6 +51,10 @@ public:
   void setConsoleText(const QString &sql, bool focus = true);
   void focusConsole();
   void openSqliteFile(const QString &path);
+  // The open project: its .env files back password variables and the new
+  // connection dialog lists the databases it describes.
+  void setWorkspaceFolder(const QString &folder);
+  QString workspaceFolder() const { return m_workspaceFolder; }
 
   bool isRunning() const;
   SqlConsoleEdit *console() const { return m_console; }
@@ -68,6 +72,9 @@ signals:
 
 public slots:
   void newConnection();
+  // Opens the new connection dialog on a template (by id) or filled from a
+  // connection URL.
+  void newConnectionFrom(const QString &templateIdOrUrl);
   void editConnection(const QString &id);
   void duplicateConnection(const QString &id);
   void removeConnection(const QString &id);
@@ -189,6 +196,10 @@ private:
 
   DatabaseManager *m_manager;
   Theme m_theme;
+  QString m_workspaceFolder;
+  // Databases the project describes, counted for the empty tree (-1: not
+  // scanned yet).
+  int m_projectDatabaseCount = -1;
 
   QToolBar *m_toolbar = nullptr;
   QComboBox *m_connectionCombo = nullptr;

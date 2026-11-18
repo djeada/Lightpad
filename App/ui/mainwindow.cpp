@@ -52,7 +52,6 @@ MainWindow::MainWindow(QWidget *parent)
       m_breakpointsSetConnection(), m_breakpointChangedConnection(),
       m_runInTerminalConnection(), m_sessionTerminatedConnection(),
       m_sessionErrorConnection(), m_sessionStateConnection(),
-      m_runProcessFinishedConnection(), m_runProcessErrorConnection(),
       m_formatProcessFinishedConnection(), m_formatProcessErrorConnection(),
       m_splitEditorContainer(nullptr), m_diagnosticsManager(nullptr),
       m_languageFeatureManager(nullptr), m_lspCompletionProvider(),
@@ -214,54 +213,41 @@ MainWindow::MainWindow(QWidget *parent)
     ui->actionRun_file_name->setShortcutContext(Qt::ApplicationShortcut);
   }
 
+  // Run and Debug share one launch target; both arrows open the same menu.
   if (ui->runButton) {
     m_runTargetMenu = new QMenu(ui->runButton);
+    m_runTargetMenu->setTitle(tr("Launch Target"));
     ui->runButton->setMenu(m_runTargetMenu);
     ui->runButton->setPopupMode(QToolButton::MenuButtonPopup);
     ui->runButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    ui->runButton->setMinimumWidth(170);
+    ui->runButton->setMinimumWidth(150);
     connect(m_runTargetMenu, &QMenu::aboutToShow, this,
-            &MainWindow::rebuildRunTargetMenu);
-
-    m_runTargetMenu->setTitle(tr("Run Target"));
+            [this]() { populateLaunchMenu(m_runTargetMenu); });
     if (ui->menuRun) {
       ui->menuRun->addSeparator();
       ui->menuRun->addMenu(m_runTargetMenu);
     }
   }
-  connect(&RunTemplateManager::instance(), &RunTemplateManager::templatesLoaded,
-          this, [this]() {
-            invalidateRunTargetCache();
-            refreshRunTargetButton();
-          });
-  connect(&RunTemplateManager::instance(),
-          &RunTemplateManager::assignmentChanged, this,
-          [this](const QString &) {
-            invalidateRunTargetCache();
-            refreshRunTargetButton();
-          });
-  refreshRunTargetButton();
-
   m_debugTargetMenu = new QMenu(ui->debugButton);
+  m_debugTargetMenu->setTitle(tr("Launch Target"));
   ui->debugButton->setMenu(m_debugTargetMenu);
   ui->debugButton->setPopupMode(QToolButton::MenuButtonPopup);
   ui->debugButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-  ui->debugButton->setMinimumWidth(170);
   connect(m_debugTargetMenu, &QMenu::aboutToShow, this,
-          &MainWindow::rebuildDebugTargetMenu);
+          [this]() { populateLaunchMenu(m_debugTargetMenu); });
+
+  const auto refreshLaunch = [this]() {
+    invalidateRunTargetCache();
+    refreshLaunchButtons();
+  };
+  connect(&RunTemplateManager::instance(), &RunTemplateManager::templatesLoaded,
+          this, refreshLaunch);
+  connect(&RunTemplateManager::instance(),
+          &RunTemplateManager::assignmentChanged, this, refreshLaunch);
   connect(&DebugConfigurationManager::instance(),
-          &DebugConfigurationManager::configurationsLoaded, this,
-          &MainWindow::refreshDebugTargetButton);
-  connect(&DebugConfigurationManager::instance(),
-          &DebugConfigurationManager::configurationAdded, this,
-          &MainWindow::refreshDebugTargetButton);
-  connect(&DebugConfigurationManager::instance(),
-          &DebugConfigurationManager::configurationChanged, this,
-          &MainWindow::refreshDebugTargetButton);
-  connect(&DebugConfigurationManager::instance(),
-          &DebugConfigurationManager::configurationRemoved, this,
-          &MainWindow::refreshDebugTargetButton);
-  refreshDebugTargetButton();
+          &DebugConfigurationManager::configurationsChanged, this,
+          &MainWindow::refreshLaunchButtons);
+  refreshLaunchButtons();
 
   const auto saveBreakpoints = []() {
     if (!BreakpointManager::instance().lightpadBreakpointsPath().isEmpty()) {
@@ -560,6 +546,9 @@ void MainWindow::setLanguageHighlightLabel(QString text) {
 }
 
 MainWindow::~MainWindow() {
+  // Programs still running in terminals are stopped while the child widgets
+  // are destroyed; launches must not react to that with half the window gone.
+  stopFollowingLaunches();
   m_globalSettingsLoaded = false;
   if (findReplacePanel)
     findReplacePanel->setMainWindow(nullptr);
@@ -645,7 +634,7 @@ void MainWindow::loadSettings() {
   m_preferredCMakeTargetRoot =
       globalSettings.getValue("preferredCMakeTargetRoot", QString()).toString();
   invalidateRunTargetCache();
-  refreshRunTargetButton();
+  refreshLaunchButtons();
 
   if (autoSaveManager) {
     autoSaveManager->setEnabled(
@@ -781,13 +770,13 @@ void MainWindow::saveSettings() {
                               findReplacePanel->isGlobalMode());
   globalSettings.setValue("showPreferencesDialog",
                           preferences && preferences->isVisible());
-  globalSettings.setValue("showRunConfigurationDialog",
-                          hasVisibleChildWidget<RunTemplateSelector>(this));
+  globalSettings.setValue(
+      "showRunConfigurationDialog",
+      hasVisibleChildWidget<LaunchConfigurationsDialog>(this));
   globalSettings.setValue("showFormatConfigurationDialog",
                           hasVisibleChildWidget<FormatTemplateSelector>(this));
-  globalSettings.setValue(
-      "showDebugConfigurationDialog",
-      hasVisibleChildWidget<DebugConfigurationDialog>(this));
+  // Run and Debug share the configurations dialog.
+  globalSettings.setValue("showDebugConfigurationDialog", false);
   globalSettings.setValue("showTestConfigurationDialog",
                           hasVisibleChildWidget<TestConfigurationDialog>(this));
   globalSettings.setValue("showShortcutsDialog",
@@ -1734,9 +1723,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
       watched == commandPalette || watched == goToLineDialog ||
       watched == goToSymbolDialog || watched == fileQuickOpen ||
       watched == recentFilesDialog ||
-      qobject_cast<RunTemplateSelector *>(watched) ||
+      qobject_cast<LaunchConfigurationsDialog *>(watched) ||
       qobject_cast<FormatTemplateSelector *>(watched) ||
-      qobject_cast<DebugConfigurationDialog *>(watched) ||
       qobject_cast<ShortcutsDialog *>(watched);
   const bool isVisibilityEvent = event->type() == QEvent::Show ||
                                  event->type() == QEvent::Hide ||
@@ -3469,13 +3457,8 @@ void MainWindow::refreshRunAndDebugActionLabels() {
 }
 
 void MainWindow::updateRunAndDebugActionLabels(const QString &fileName) {
-  refreshRunTargetButton();
-  refreshDebugTargetButton();
-  const QString label = fileName.trimmed();
-  if (ui->actionRun_file_name) {
-    ui->actionRun_file_name->setText(label.isEmpty() ? tr("Run Current File")
-                                                     : tr("Run %1").arg(label));
-  }
+  Q_UNUSED(fileName);
+  refreshLaunchButtons();
 }
 
 void MainWindow::updateTabWidgetContext(LightpadTabWidget *tabWidget,

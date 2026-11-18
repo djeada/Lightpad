@@ -18,6 +18,14 @@ int WatchManager::addWatch(const QString &expression) {
     return 0;
   }
 
+  // Watching the same expression twice only adds noise; return the existing
+  // watch instead.
+  for (const WatchExpression &existing : std::as_const(m_watches)) {
+    if (existing.expression == expression.trimmed()) {
+      return existing.id;
+    }
+  }
+
   WatchExpression watch;
   watch.id = m_nextId++;
   watch.expression = expression.trimmed();

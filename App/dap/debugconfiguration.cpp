@@ -11,6 +11,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QProcess>
+#include <QSaveFile>
 #include <QSet>
 #include <algorithm>
 #include <functional>
@@ -21,6 +22,81 @@ DebugConfigurationManager &DebugConfigurationManager::instance() {
 }
 
 DebugConfigurationManager::DebugConfigurationManager() : QObject(nullptr) {}
+
+namespace {
+// The exact entries DebugSettings used to write into every new project.
+QJsonObject legacySampleDocument() {
+  static const QJsonObject document = QJsonDocument::fromJson(R"json({
+    "configurations": [
+      {"name": "Python: Current File", "adapterId": "python-debugpy",
+       "type": "debugpy", "request": "launch", "program": "${file}",
+       "console": "integratedTerminal", "cwd": "${workspaceFolder}",
+       "_comment": "Example Python debug configuration"},
+      {"name": "C++: GDB Launch", "adapterId": "cppdbg-gdb", "type": "cppdbg",
+       "request": "launch", "program": "${workspaceFolder}/a.out", "args": [],
+       "stopAtEntry": false, "cwd": "${workspaceFolder}", "environment": [],
+       "externalConsole": false, "MIMode": "gdb", "miDebuggerPath": "gdb",
+       "setupCommands": [{"description": "Enable pretty-printing for gdb",
+                          "text": "-enable-pretty-printing",
+                          "ignoreFailures": true}],
+       "_comment": "Example C++ GDB debug configuration"},
+      {"name": "Node.js: Current File", "adapterId": "node-debug",
+       "type": "node", "request": "launch", "program": "${file}",
+       "cwd": "${workspaceFolder}", "console": "integratedTerminal",
+       "_comment": "Example Node.js debug configuration"},
+      {"name": "Go: Current File", "adapterId": "go-delve", "type": "go",
+       "request": "launch", "mode": "debug", "program": "${file}",
+       "cwd": "${workspaceFolder}",
+       "_comment": "Example Go debug configuration using Delve"},
+      {"name": "Rust: Debug Binary", "adapterId": "rust-codelldb",
+       "type": "lldb", "request": "launch",
+       "program": "${workspaceFolder}/target/debug/${workspaceFolderBasename}",
+       "cwd": "${workspaceFolder}", "args": [],
+       "_comment": "Example Rust debug configuration using CodeLLDB"}
+    ],
+    "compounds": [
+      {"name": "Server + Client", "configurations": ["Server", "Client"],
+       "stopAll": true,
+       "_comment": "Example compound configuration for debugging multiple targets"}
+    ]
+  })json")
+                                          .object();
+  return document;
+}
+
+// Compares through fromJson/toJson so samples that a previous version of the
+// configuration dialog re-saved (dropping empty fields) still match.
+bool containsSample(const QJsonArray &samples, const QJsonObject &object) {
+  const QJsonObject normalized = DebugConfiguration::fromJson(object).toJson();
+  for (const QJsonValue &sample : samples) {
+    if (DebugConfiguration::fromJson(sample.toObject()).toJson() ==
+        normalized) {
+      return true;
+    }
+  }
+  return false;
+}
+} // namespace
+
+bool DebugConfigurationManager::isLegacySampleConfiguration(
+    const QJsonObject &object) {
+  return object.value("_comment").toString().startsWith("Example ") &&
+         containsSample(
+             legacySampleDocument().value("configurations").toArray(), object);
+}
+
+bool DebugConfigurationManager::isLegacySampleCompound(
+    const QJsonObject &object) {
+  const CompoundDebugConfiguration compound =
+      CompoundDebugConfiguration::fromJson(object);
+  const CompoundDebugConfiguration sample =
+      CompoundDebugConfiguration::fromJson(legacySampleDocument()
+                                               .value("compounds")
+                                               .toArray()
+                                               .first()
+                                               .toObject());
+  return compound.toJson() == sample.toJson();
+}
 
 bool DebugConfigurationManager::loadFromFile(const QString &filePath) {
   QFile file(filePath);
@@ -44,20 +120,27 @@ bool DebugConfigurationManager::loadFromFile(const QString &filePath) {
   m_configurations.clear();
   m_compoundConfigurations.clear();
 
-  QJsonArray cfgArray = root["configurations"].toArray();
-  for (const auto &val : cfgArray) {
-    DebugConfiguration cfg = DebugConfiguration::fromJson(val.toObject());
-    if (!cfg.name.isEmpty()) {
-      m_configurations[cfg.name] = cfg;
+  for (const auto &val : root["configurations"].toArray()) {
+    const QJsonObject object = val.toObject();
+    if (isLegacySampleConfiguration(object)) {
+      continue;
+    }
+    DebugConfiguration cfg = DebugConfiguration::fromJson(object);
+    if (!cfg.name.isEmpty() && indexOf(cfg.name) < 0) {
+      m_configurations.append(cfg);
     }
   }
 
-  QJsonArray compoundArray = root["compounds"].toArray();
-  for (const auto &val : compoundArray) {
+  for (const auto &val : root["compounds"].toArray()) {
+    const QJsonObject object = val.toObject();
+    if (isLegacySampleCompound(object) && indexOf("Server") < 0 &&
+        indexOf("Client") < 0) {
+      continue;
+    }
     CompoundDebugConfiguration cfg =
-        CompoundDebugConfiguration::fromJson(val.toObject());
-    if (!cfg.name.isEmpty()) {
-      m_compoundConfigurations[cfg.name] = cfg;
+        CompoundDebugConfiguration::fromJson(object);
+    if (!cfg.name.isEmpty() && compoundIndexOf(cfg.name) < 0) {
+      m_compoundConfigurations.append(cfg);
     }
   }
 
@@ -68,6 +151,7 @@ bool DebugConfigurationManager::loadFromFile(const QString &filePath) {
                .arg(filePath));
 
   emit configurationsLoaded();
+  emit configurationsChanged();
   return true;
 }
 
@@ -89,15 +173,24 @@ bool DebugConfigurationManager::saveToFile(const QString &filePath) {
     root["compounds"] = compoundArray;
   }
 
-  QFile file(filePath);
+  const QFileInfo info(filePath);
+  if (!QDir().mkpath(info.absolutePath())) {
+    LOG_ERROR(QString("Failed to create %1").arg(info.absolutePath()));
+    return false;
+  }
+
+  QSaveFile file(filePath);
   if (!file.open(QIODevice::WriteOnly)) {
     LOG_ERROR(
         QString("Failed to save debug configuration file: %1").arg(filePath));
     return false;
   }
-
-  QJsonDocument doc(root);
-  file.write(doc.toJson(QJsonDocument::Indented));
+  file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+  if (!file.commit()) {
+    LOG_ERROR(
+        QString("Failed to save debug configuration file: %1").arg(filePath));
+    return false;
+  }
 
   m_configFilePath = filePath;
   LOG_INFO(QString("Saved %1 debug configurations to %2")
@@ -107,31 +200,62 @@ bool DebugConfigurationManager::saveToFile(const QString &filePath) {
   return true;
 }
 
+int DebugConfigurationManager::indexOf(const QString &name) const {
+  for (int i = 0; i < m_configurations.size(); ++i) {
+    if (m_configurations.at(i).name == name) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int DebugConfigurationManager::compoundIndexOf(const QString &name) const {
+  for (int i = 0; i < m_compoundConfigurations.size(); ++i) {
+    if (m_compoundConfigurations.at(i).name == name) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 void DebugConfigurationManager::addConfiguration(
     const DebugConfiguration &config) {
-  m_configurations[config.name] = config;
+  const int index = indexOf(config.name);
+  if (index >= 0) {
+    m_configurations[index] = config;
+  } else {
+    m_configurations.append(config);
+  }
   emit configurationAdded(config.name);
+  emit configurationsChanged();
 }
 
 void DebugConfigurationManager::removeConfiguration(const QString &name) {
-  if (m_configurations.remove(name) > 0) {
-    emit configurationRemoved(name);
+  const int index = indexOf(name);
+  if (index < 0) {
+    return;
   }
+  m_configurations.removeAt(index);
+  emit configurationRemoved(name);
+  emit configurationsChanged();
 }
 
 bool DebugConfigurationManager::updateConfiguration(
     const QString &name, const DebugConfiguration &config) {
-  if (name != config.name && m_configurations.contains(config.name)) {
+  if (name != config.name && indexOf(config.name) >= 0) {
     LOG_WARNING(QString("Refusing to rename debug configuration '%1' to "
                         "existing name '%2'")
                     .arg(name, config.name));
     return false;
   }
-  if (name != config.name && m_configurations.contains(name)) {
-    m_configurations.remove(name);
+  const int index = indexOf(name);
+  if (index >= 0) {
+    m_configurations[index] = config;
+  } else {
+    m_configurations.append(config);
   }
-  m_configurations[config.name] = config;
   emit configurationChanged(config.name);
+  emit configurationsChanged();
   return true;
 }
 
@@ -139,11 +263,12 @@ void DebugConfigurationManager::replaceConfigurations(
     const QList<DebugConfiguration> &configurations) {
   m_configurations.clear();
   for (const DebugConfiguration &cfg : configurations) {
-    if (!cfg.name.isEmpty()) {
-      m_configurations[cfg.name] = cfg;
+    if (!cfg.name.isEmpty() && indexOf(cfg.name) < 0) {
+      m_configurations.append(cfg);
     }
   }
   emit configurationsLoaded();
+  emit configurationsChanged();
 }
 
 QString DebugConfigurationManager::joinCommandLineArguments(
@@ -151,7 +276,7 @@ QString DebugConfigurationManager::joinCommandLineArguments(
   QStringList quoted;
   for (const QString &arg : arguments) {
     const bool needsQuotes =
-        arg.contains(QLatin1Char('"')) ||
+        arg.isEmpty() || arg.contains(QLatin1Char('"')) ||
         std::any_of(arg.begin(), arg.end(),
                     [](const QChar &ch) { return ch.isSpace(); });
     if (!needsQuotes) {
@@ -172,11 +297,16 @@ QStringList DebugConfigurationManager::splitCommandLineArguments(
 
 DebugConfiguration
 DebugConfigurationManager::configuration(const QString &name) const {
-  return m_configurations.value(name);
+  const int index = indexOf(name);
+  return index >= 0 ? m_configurations.at(index) : DebugConfiguration();
+}
+
+bool DebugConfigurationManager::hasConfiguration(const QString &name) const {
+  return indexOf(name) >= 0;
 }
 
 QList<DebugConfiguration> DebugConfigurationManager::allConfigurations() const {
-  return m_configurations.values();
+  return m_configurations;
 }
 
 QList<DebugConfiguration>
@@ -192,12 +322,52 @@ DebugConfigurationManager::configurationsForType(const QString &type) const {
 
 void DebugConfigurationManager::addCompoundConfiguration(
     const CompoundDebugConfiguration &config) {
-  m_compoundConfigurations[config.name] = config;
+  const int index = compoundIndexOf(config.name);
+  if (index >= 0) {
+    m_compoundConfigurations[index] = config;
+  } else {
+    m_compoundConfigurations.append(config);
+  }
+  emit configurationsChanged();
+}
+
+void DebugConfigurationManager::replaceCompoundConfigurations(
+    const QList<CompoundDebugConfiguration> &compounds) {
+  m_compoundConfigurations.clear();
+  for (const CompoundDebugConfiguration &compound : compounds) {
+    if (!compound.name.isEmpty() && compoundIndexOf(compound.name) < 0) {
+      m_compoundConfigurations.append(compound);
+    }
+  }
+  emit configurationsChanged();
+}
+
+CompoundDebugConfiguration
+DebugConfigurationManager::compoundConfiguration(const QString &name) const {
+  const int index = compoundIndexOf(name);
+  return index >= 0 ? m_compoundConfigurations.at(index)
+                    : CompoundDebugConfiguration();
+}
+
+bool DebugConfigurationManager::hasCompoundConfiguration(
+    const QString &name) const {
+  return compoundIndexOf(name) >= 0;
 }
 
 QList<CompoundDebugConfiguration>
 DebugConfigurationManager::allCompoundConfigurations() const {
-  return m_compoundConfigurations.values();
+  return m_compoundConfigurations;
+}
+
+QString DebugConfigurationManager::uniqueName(const QString &baseName) const {
+  const QString base =
+      baseName.trimmed().isEmpty() ? tr("New Configuration") : baseName;
+  QString candidate = base;
+  int suffix = 2;
+  while (indexOf(candidate) >= 0 || compoundIndexOf(candidate) >= 0) {
+    candidate = QString("%1 (%2)").arg(base).arg(suffix++);
+  }
+  return candidate;
 }
 
 void DebugConfigurationManager::setWorkspaceFolder(const QString &folder) {
@@ -264,6 +434,12 @@ DebugConfigurationManager::resolveVariables(const DebugConfiguration &config,
     resolved.adapterConfig[it.key()] = substituteJsonValue(it.value());
   }
 
+  resolved.preLaunchTask = substituteVariable(config.preLaunchTask, currentFile,
+                                              pythonPreference, resolved.cwd);
+  resolved.postDebugTask = substituteVariable(config.postDebugTask, currentFile,
+                                              pythonPreference, resolved.cwd);
+  resolved.host = substituteVariable(config.host, currentFile, pythonPreference,
+                                     resolved.cwd);
   resolved.pythonInterpreter = substituteVariable(
       config.pythonInterpreter, currentFile, pythonPreference, resolved.cwd);
   resolved.pythonVenvPath = substituteVariable(
@@ -279,34 +455,9 @@ QString DebugConfigurationManager::substituteVariable(
     const QString &value, const QString &currentFile,
     const PythonEnvironmentPreference &pythonPreference,
     const QString &workingDirectory) const {
-  QString result = PythonProjectEnvironment::substituteVariables(
+  return PythonProjectEnvironment::substituteVariables(
       value, m_workspaceFolder, currentFile, workingDirectory,
       pythonPreference);
-
-  if (!currentFile.isEmpty()) {
-    QFileInfo fi(currentFile);
-    result.replace("${fileBasenameNoExtension}", fi.completeBaseName());
-    result.replace("${fileDirname}", fi.absolutePath());
-    result.replace("${fileExtname}",
-                   fi.suffix().isEmpty() ? "" : "." + fi.suffix());
-
-    if (!m_workspaceFolder.isEmpty() &&
-        currentFile.startsWith(m_workspaceFolder)) {
-      QString relative = currentFile.mid(m_workspaceFolder.length());
-      if (relative.startsWith('/') || relative.startsWith('\\')) {
-        relative = relative.mid(1);
-      }
-      result.replace("${relativeFile}", relative);
-    }
-  }
-
-#ifdef Q_OS_WIN
-  result.replace("${pathSeparator}", "\\");
-#else
-  result.replace("${pathSeparator}", "/");
-#endif
-
-  return result;
 }
 
 DebugConfiguration
@@ -442,48 +593,29 @@ DebugConfiguration DebugConfigurationManager::createPytestConfig(
 }
 
 bool DebugConfigurationManager::loadFromLightpadDir() {
-  QString path = lightpadLaunchConfigPath();
+  const QString path = lightpadLaunchConfigPath();
   if (path.isEmpty()) {
     LOG_WARNING("Cannot load launch config: workspace folder not set");
     return false;
   }
 
-  QDir dir(m_workspaceFolder + "/.lightpad/debug");
-  if (!dir.exists()) {
-    dir.mkpath(".");
-  }
-
   if (!QFile::exists(path)) {
-    LOG_INFO("Creating default launch.json in .lightpad/debug/");
-
-    QJsonObject root;
-    root["version"] = "1.0.0";
-    root["_comment"] = "Debug launch configurations. Edit this file to add "
-                       "your own configurations.";
-    root["configurations"] = QJsonArray();
-    root["compounds"] = QJsonArray();
-
-    QFile file(path);
-    if (file.open(QIODevice::WriteOnly)) {
-      QJsonDocument doc(root);
-      file.write(doc.toJson(QJsonDocument::Indented));
-    }
+    m_configurations.clear();
+    m_compoundConfigurations.clear();
+    m_configFilePath = path;
+    emit configurationsLoaded();
+    emit configurationsChanged();
+    return true;
   }
 
   return loadFromFile(path);
 }
 
 bool DebugConfigurationManager::saveToLightpadDir() {
-  QString path = lightpadLaunchConfigPath();
+  const QString path = lightpadLaunchConfigPath();
   if (path.isEmpty()) {
     LOG_WARNING("Cannot save launch config: workspace folder not set");
     return false;
   }
-
-  QDir dir(m_workspaceFolder + "/.lightpad/debug");
-  if (!dir.exists()) {
-    dir.mkpath(".");
-  }
-
   return saveToFile(path);
 }

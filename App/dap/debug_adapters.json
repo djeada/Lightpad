@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "description": "Debug adapters Lightpad starts from data: any program that speaks the Debug Adapter Protocol over stdio. Add your own (or override one by id) in <config dir>/Lightpad/debug_adapters.json.",
+  "adapters": [
+    {
+      "id": "lldb-dap",
+      "name": "LLDB (lldb-dap)",
+      "type": "lldb-dap",
+      "languages": ["c", "cpp", "rust", "swift", "zig", "objective-c"],
+      "extensions": [".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".rs", ".swift", ".zig", ".m", ".mm"],
+      "command": ["lldb-dap", "lldb-vscode", "lldb-dap-20", "lldb-dap-19", "lldb-dap-18", "lldb-vscode-17", "lldb-vscode-16", "lldb-vscode-15", "lldb-vscode-14"],
+      "processIdKey": "pid",
+      "launch": {
+        "program": "${fileDirname}/${fileBasenameNoExtension}",
+        "args": [],
+        "cwd": "${cwd}",
+        "stopOnEntry": false
+      },
+      "attach": {
+        "waitFor": false
+      },
+      "install": "Install LLVM's LLDB: lldb-dap ships with LLVM 18 and later (older releases call it lldb-vscode), and with the Swift toolchain.",
+      "docs": "https://github.com/llvm/llvm-project/tree/main/lldb/tools/lldb-dap"
+    },
+    {
+      "id": "netcoredbg",
+      "name": "C# / .NET (netcoredbg)",
+      "type": "coreclr",
+      "languages": ["csharp", "fsharp"],
+      "extensions": [".cs", ".fs"],
+      "command": ["netcoredbg"],
+      "arguments": ["--interpreter=vscode"],
+      "probe": ["--version"],
+      "launch": {
+        "program": "${workspaceFolder}/bin/Debug/net8.0/${workspaceFolderBasename}.dll",
+        "args": [],
+        "cwd": "${workspaceFolder}",
+        "stopAtEntry": false
+      },
+      "exceptionFilters": [
+        {"filter": "all", "label": "All Exceptions", "default": false},
+        {"filter": "user-unhandled", "label": "User-Unhandled Exceptions", "default": true}
+      ],
+      "run": {"program": "dotnet", "args": ["${program}", "${args}"]},
+      "install": "Download netcoredbg from https://github.com/Samsung/netcoredbg/releases and put it on PATH (or set its path in the debugger options).",
+      "docs": "https://github.com/Samsung/netcoredbg"
+    },
+    {
+      "id": "dart",
+      "name": "Dart",
+      "type": "dart",
+      "languages": ["dart"],
+      "extensions": [".dart"],
+      "command": ["dart"],
+      "arguments": ["debug_adapter"],
+      "probe": ["--version"],
+      "launch": {
+        "program": "${file}",
+        "cwd": "${cwd}"
+      },
+      "run": {"program": "dart", "args": ["run", "${program}", "${args}"]},
+      "install": "Install the Dart SDK (https://dart.dev/get-dart); its dart command includes the debug adapter.",
+      "docs": "https://github.com/dart-lang/sdk/blob/main/pkg/dds/tool/dap/README.md"
+    },
+    {
+      "id": "flutter",
+      "name": "Flutter",
+      "type": "flutter",
+      "languages": ["dart"],
+      "extensions": [".dart"],
+      "command": ["flutter"],
+      "arguments": ["debug_adapter"],
+      "launch": {
+        "program": "lib/main.dart",
+        "cwd": "${workspaceFolder}"
+      },
+      "run": {"program": "flutter", "args": ["run", "--target", "${program}", "${args}"]},
+      "install": "Install Flutter (https://docs.flutter.dev/get-started/install); flutter debug_adapter is part of it.",
+      "docs": "https://github.com/flutter/flutter/blob/master/packages/flutter_tools/lib/src/debug_adapters/README.md"
+    },
+    {
+      "id": "ocamlearlybird",
+      "name": "OCaml (earlybird)",
+      "type": "ocamlearlybird",
+      "languages": ["ocaml"],
+      "extensions": [".ml"],
+      "command": ["ocamlearlybird"],
+      "arguments": ["debug"],
+      "launch": {
+        "program": "${workspaceFolder}/_build/default/bin/main.bc",
+        "cwd": "${workspaceFolder}",
+        "stopOnEntry": false
+      },
+      "supports": {"functionBreakpoints": false, "logPoints": false},
+      "run": {"program": "ocamlrun", "args": ["${program}", "${args}"]},
+      "install": "opam install earlybird. Debugging needs bytecode: build with (modes byte exe) and point Program at the .bc file.",
+      "docs": "https://github.com/hackwaly/ocamlearlybird"
+    }
+  ]
+}

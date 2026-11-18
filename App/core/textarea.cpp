@@ -38,6 +38,7 @@
 #include "../completion/completionwidget.h"
 #include "../completion/snippetregistry.h"
 #include "../dap/breakpointmanager.h"
+#include "../dap/debuginlinescope.h"
 #include "../diagnostics/diagnosticutils.h"
 #include "../git/gitintegration.h"
 #include "../language/languagecatalog.h"
@@ -2604,7 +2605,9 @@ void TextArea::paintEvent(QPaintEvent *event) {
     painter.setFont(ghostFont);
     painter.setPen(QColor(110, 150, 200, 190));
 
-    const int firstLine = qMax(1, m_debugInlineStopLine - 40);
+    const int firstLine = m_debugInlineFirstLine > 0
+                              ? m_debugInlineFirstLine
+                              : qMax(1, m_debugInlineStopLine - 40);
     QTextBlock block = firstVisibleBlock();
     while (block.isValid()) {
       const QRectF geom =
@@ -3062,6 +3065,7 @@ void TextArea::setCodeLensEnabled(bool enabled) {
 bool TextArea::isCodeLensEnabled() const { return m_codeLensEnabled; }
 
 void TextArea::setDebugInlineValues(const QString &filePath, int stopLine,
+                                    const QString &functionName,
                                     const QHash<QString, QString> &values) {
   auto canonical = [](const QString &path) {
     const QString resolved = QFileInfo(path).canonicalFilePath();
@@ -3073,6 +3077,25 @@ void TextArea::setDebugInlineValues(const QString &filePath, int stopLine,
                           : QString();
   m_debugInlineStopLine = stopLine;
   m_debugInlineValues = values;
+  m_debugInlineFirstLine = 0;
+  if (!m_debugInlineFile.isEmpty() && stopLine > 0) {
+    QStringList lines;
+    const int first = qMax(0, stopLine - 400);
+    for (QTextBlock block = document()->findBlockByNumber(first);
+         block.isValid() && block.blockNumber() < stopLine;
+         block = block.next()) {
+      lines << block.text();
+    }
+    // Lines before `first` were not collected; shift the result back.
+    QStringList padded;
+    padded.reserve(stopLine);
+    for (int i = 0; i < first; ++i) {
+      padded << QString();
+    }
+    padded << lines;
+    m_debugInlineFirstLine =
+        DebugInlineScope::scopeStartLine(padded, stopLine, functionName);
+  }
   viewport()->update();
 }
 
@@ -3083,6 +3106,7 @@ void TextArea::clearDebugInlineValues() {
   m_debugInlineValues.clear();
   m_debugInlineFile.clear();
   m_debugInlineStopLine = 0;
+  m_debugInlineFirstLine = 0;
   viewport()->update();
 }
 
