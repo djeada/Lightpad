@@ -4351,15 +4351,30 @@ void TestDap::testOpenGLCppObjectsAndMatrices() {
   QCOMPARE(table->rowCount(), 4);
   QCOMPARE(table->columnCount(), 4);
   QCOMPARE(table->item(0, 1)->text(), QString("0"));
+  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  QVERIFY(evaluateDebugObject(client, frame.id, "scene.vertices[0]", &value));
+  inspector.setValue(value);
+  auto *record = tree->topLevelItem(0);
+  QTRY_COMPARE(record->childCount(), 2);
+  QTRY_COMPARE(record->child(0)->text(1), QString("[-0.5, -0.5, 0]"));
+  QTRY_COMPARE(record->child(1)->text(1), QString("[1, 0, 0, 1]"));
+  QVERIFY(!record->child(0)->isExpanded());
+  QVERIFY(!record->child(1)->isExpanded());
+
   QVERIFY(evaluateDebugObject(client, frame.id, "scene.vertices", &value));
   inspector.setValue(value);
-  auto *tree = inspector.findChild<QTreeWidget *>("debugValueTree");
+  QTRY_VERIFY_WITH_TIMEOUT(table->item(0, 0) && table->item(0, 1), 10000);
+  QTRY_COMPARE_WITH_TIMEOUT(table->item(0, 0)->text(),
+                            QString("[-0.5, -0.5, 0]"), 10000);
+  QTRY_COMPARE_WITH_TIMEOUT(table->item(0, 1)->text(), QString("[1, 0, 0, 1]"),
+                            10000);
+  QCOMPARE(table->item(1, 0)->text(), QString("[0.5, -0.5, 0]"));
+  table->cellActivated(0, 0);
   QTRY_COMPARE_WITH_TIMEOUT(tree->topLevelItem(0)->childCount(), 3, 10000);
   auto *vertex = tree->topLevelItem(0)->child(0);
-  vertex->setExpanded(true);
   QTRY_COMPARE_WITH_TIMEOUT(vertex->childCount(), 2, 10000);
   QCOMPARE(vertex->child(0)->text(0), QString("position"));
-  vertex->child(0)->setExpanded(true);
+  QCOMPARE(tree->currentItem(), vertex->child(0));
   QTRY_COMPARE_WITH_TIMEOUT(vertex->child(0)->childCount(), 3, 10000);
   QCOMPARE(vertex->child(0)->child(0)->text(1), QString("-0.5"));
   client.stepOver(client.currentThreadId());
