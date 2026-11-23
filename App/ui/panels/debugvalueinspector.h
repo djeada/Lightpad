@@ -15,6 +15,7 @@ class QPlainTextEdit;
 class QPushButton;
 class QTabWidget;
 class QTableWidget;
+class QTimer;
 class QTreeWidget;
 class QTreeWidgetItem;
 class QSpinBox;
@@ -44,15 +45,18 @@ private:
     int count = 0;
     int reference = 0;
     bool prefix = false;
+    bool preview = false;
   };
   void loadChildren(QTreeWidgetItem *item, int start = 0,
-                    int referenceOverride = 0);
+                    int referenceOverride = 0, bool preview = false);
   void receiveChildren(int seq, const QList<DapVariable> &variables);
   void receiveSequenceChildren(const Request &request,
                                const QList<DapVariable> &variables);
   void appendChildren(const Request &request,
                       const QList<DapVariable> &variables, int next, bool more);
   void addPage(QTreeWidgetItem *parent, int next, int count);
+  void scheduleViewUpdate();
+  void updateTreePreviews();
   void updateTable();
   void filterTree();
   void copySelection();
@@ -83,6 +87,7 @@ private:
   void updateItem(QTreeWidgetItem *item, const DapVariable &value);
   QString displayValue(const QString &value, const QString &type) const;
   QString itemDisplayValue(const QTreeWidgetItem *item) const;
+  QString compactPreview(QTreeWidgetItem *item, bool unwrapArray = true);
   static bool hasChildren(const QTreeWidgetItem *item);
   bool hasKnownEmptyChildren(const DapVariable &value) const;
   static bool repeatsPrefix(const QList<DapVariable> &variables,
@@ -143,6 +148,7 @@ private:
   QTabWidget *m_tabs = nullptr;
   QTreeWidget *m_tree = nullptr;
   QTableWidget *m_table = nullptr;
+  QTimer *m_viewUpdate = nullptr;
   QPlainTextEdit *m_text = nullptr;
   QPushButton *m_watch = nullptr;
   QTreeWidgetItem *m_root = nullptr;

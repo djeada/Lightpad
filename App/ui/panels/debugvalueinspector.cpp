@@ -25,6 +25,7 @@
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QTableWidget>
+#include <QTimer>
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -51,10 +52,22 @@ constexpr int NextOffset = Qt::UserRole + 17;
 constexpr int FixedArray = Qt::UserRole + 18;
 constexpr int RepeatedReference = Qt::UserRole + 19;
 constexpr int MoreStart = Qt::UserRole + 20;
+constexpr int PreviewRequested = Qt::UserRole + 21;
 constexpr int PageSize = 100;
 constexpr int MaxTreeItems = 10000;
 constexpr int TableRows = 50;
 constexpr int TableColumns = 50;
+constexpr int PreviewMembers = 8;
+constexpr int PreviewRequests = 24;
+constexpr int TablePreviewWidth = 520;
+
+bool isPlaceholder(const QString &value) {
+  const QString text = value.trimmed();
+  return text.isEmpty() || text == QStringLiteral("{...}") ||
+         text == QStringLiteral("{…}") || text == QStringLiteral("[...]") ||
+         text == QStringLiteral("[…]") || text == QStringLiteral("...") ||
+         text == QStringLiteral("…");
+}
 
 void removePage(QTreeWidgetItem *parent) {
   const int last = parent->childCount() - 1;
@@ -224,8 +237,11 @@ DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
   m_filter->setMinimumWidth(80);
   m_filter->setMaximumWidth(240);
   m_filter->setClearButtonEnabled(true);
-  connect(m_filter, &QLineEdit::textChanged, this,
-          &DebugValueInspector::filterTree);
+  connect(m_filter, &QLineEdit::textChanged, this, [this]() {
+    filterTree();
+    if (m_tabs->currentIndex() == 0)
+      scheduleViewUpdate();
+  });
 
   m_tabs = new QTabWidget(this);
   m_tabs->setObjectName("debugValueTabs");
@@ -257,6 +273,8 @@ DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
           [this](QTreeWidgetItem *item) {
             if (!item->data(0, Loaded).toBool())
               loadChildren(item);
+            if (m_tabs->currentIndex() == 0)
+              scheduleViewUpdate();
           });
   connect(m_tree, &QTreeWidget::itemActivated, this,
           [this](QTreeWidgetItem *item, int) {
@@ -315,8 +333,12 @@ DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
   m_tabs->addTab(m_text, tr("Text"));
   connect(m_tabs, &QTabWidget::currentChanged, this, [this](int index) {
     m_filter->setVisible(index != 2);
-    if (index == 1)
+    if (index == 1) {
       updateTable();
+      filterTree();
+    } else if (index == 0) {
+      scheduleViewUpdate();
+    }
   });
   connect(m_tabs, &QTabWidget::tabBarClicked, this,
           [this]() { m_autoTable = false; });
@@ -333,6 +355,19 @@ DebugValueInspector::DebugValueInspector(QWidget *parent) : QWidget(parent) {
   m_status->setWordWrap(false);
   m_status->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
   layout->addWidget(m_status);
+
+  // A collection of records can receive many child replies in one batch.
+  m_viewUpdate = new QTimer(this);
+  m_viewUpdate->setSingleShot(true);
+  m_viewUpdate->setInterval(16);
+  connect(m_viewUpdate, &QTimer::timeout, this, [this]() {
+    if (m_tabs->currentIndex() == 0)
+      updateTreePreviews();
+    else if (m_tabs->currentIndex() == 1)
+      updateTable();
+    filterTree();
+    restoreView();
+  });
 }
 
 void DebugValueInspector::setDapClient(DapClient *client) {
@@ -375,6 +410,11 @@ void DebugValueInspector::setDapClient(DapClient *client) {
             if (!m_requests.contains(seq))
               return;
             const Request request = m_requests.take(seq);
+            if (request.preview) {
+              scheduleViewUpdate();
+              if (!request.item->isExpanded())
+                return;
+            }
             m_status->setText(
                 request.start == 0
                     ? tr("Could not load children: %1. Collapse "
@@ -502,6 +542,56 @@ DebugValueInspector::itemDisplayValue(const QTreeWidgetItem *item) const {
   return text;
 }
 
+QString DebugValueInspector::compactPreview(QTreeWidgetItem *item,
+                                            bool unwrapArray) {
+  if (!item || !hasChildren(item) || item->data(0, NamedChildren).toBool() ||
+      item->data(0, RepeatedReference).toBool() ||
+      !isPlaceholder(item->data(0, RawValue).toString()))
+    return {};
+  if (!item->data(0, Loaded).toBool()) {
+    const int count =
+        item->data(0, IndexedCount).toInt() + item->data(0, NamedCount).toInt();
+    if (m_live && count > 0 && count <= PreviewMembers &&
+        m_itemCount < MaxTreeItems && m_requests.size() < PreviewRequests &&
+        item->data(0, Reference).toInt() > 0 &&
+        !item->data(0, PointerRow).toBool() &&
+        !item->data(0, PreviewRequested).toBool()) {
+      item->setData(0, PreviewRequested, true);
+      loadChildren(item, 0, 0, true);
+    }
+    return {};
+  }
+
+  const int count = item->childCount();
+  if (count == 0 || count > PreviewMembers)
+    return {};
+  auto *first = item->child(0);
+  if (unwrapArray && count == 1 && item->text(2).contains("::array<") &&
+      (first->text(0) == "_M_elems" || first->text(0) == "__elems_")) {
+    // Some standard libraries expose std::array through its storage field.
+    return isPlaceholder(first->data(0, RawValue).toString())
+               ? compactPreview(first, false)
+               : itemDisplayValue(first);
+  }
+
+  QStringList values;
+  bool indexed = true;
+  for (int i = 0; i < count; ++i) {
+    const auto *child = item->child(i);
+    if (child->data(0, PageAction).toBool() ||
+        child->data(0, NamedChildren).toBool() ||
+        isPlaceholder(child->data(0, RawValue).toString()))
+      return {};
+    indexed = indexed && indexForName(child->text(0)) >= 0;
+    values << itemDisplayValue(child);
+  }
+  if (indexed)
+    return QStringLiteral("[%1]").arg(values.join(", "));
+  for (int i = 0; i < count; ++i)
+    values[i].prepend(item->child(i)->text(0) + " = ");
+  return QStringLiteral("{%1}").arg(values.join(", "));
+}
+
 void DebugValueInspector::updateItem(QTreeWidgetItem *item,
                                      const DapVariable &value) {
   item->setText(0, value.name);
@@ -564,6 +654,7 @@ void DebugValueInspector::updateItem(QTreeWidgetItem *item,
 }
 
 void DebugValueInspector::clearValue() {
+  m_viewUpdate->stop();
   m_requests.clear();
   m_elementRequests.clear();
   m_arrayPages.clear();
@@ -776,7 +867,9 @@ void DebugValueInspector::refreshValue(bool explicitRequest) {
   }
   m_explicitRefresh = explicitRequest;
   m_waitingForFrame = true;
-  m_status->setText(tr("Refreshing %1…").arg(m_expression));
+  m_status->setText(
+      (m_live ? tr("Refreshing %1…") : tr("Snapshot — refreshing %1…"))
+          .arg(m_expression));
   // Frame IDs and variable references expire whenever the program resumes.
   // Locate the original invocation again, including while stepping into calls.
   m_client->getStackTrace(m_threadId, 0, 100);
@@ -1119,6 +1212,8 @@ void DebugValueInspector::refreshDisplay() {
   updateText();
   if (m_tabs->currentIndex() == 1)
     updateTable();
+  else if (m_tabs->currentIndex() == 0)
+    updateTreePreviews();
   filterTree();
   restoreView();
 }
@@ -1181,7 +1276,7 @@ QString DebugValueInspector::childFilter(const QTreeWidgetItem *item) const {
 }
 
 void DebugValueInspector::loadChildren(QTreeWidgetItem *item, int start,
-                                       int referenceOverride) {
+                                       int referenceOverride, bool preview) {
   if (!item || start != item->data(0, NextOffset).toInt())
     return;
   if (item->data(0, StringBytes).isValid()) {
@@ -1201,10 +1296,11 @@ void DebugValueInspector::loadChildren(QTreeWidgetItem *item, int start,
       return;
   }
   const QString filter = childFilter(item);
+  const int pageSize = preview ? PreviewMembers : PageSize;
   int count = pagesByIndex(filter)
-                  ? std::min({PageSize, MaxTreeItems - m_itemCount,
+                  ? std::min({pageSize, MaxTreeItems - m_itemCount,
                               item->data(0, IndexedCount).toInt() - start})
-                  : qMin(PageSize, MaxTreeItems - m_itemCount);
+                  : qMin(pageSize, MaxTreeItems - m_itemCount);
   const bool gdb =
       m_client->adapterId().contains("gdb", Qt::CaseInsensitive) ||
       m_client->adapterType().compare("gdb", Qt::CaseInsensitive) == 0;
@@ -1242,8 +1338,9 @@ void DebugValueInspector::loadChildren(QTreeWidgetItem *item, int start,
                                  : prefix ? qMin(MaxTreeItems, start + count)
                                           : count);
   if (seq > 0) {
-    m_requests.insert(seq, {item, start, count, reference, prefix});
-    m_status->setText(tr("Loading children…"));
+    m_requests.insert(seq, {item, start, count, reference, prefix, preview});
+    if (!preview)
+      m_status->setText(tr("Loading children…"));
   }
 }
 
@@ -1442,13 +1539,15 @@ void DebugValueInspector::appendChildren(const Request &request,
   if (parent->childCount() == 0 && !more)
     parent->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
   addPage(parent, next, more ? PageSize : 0);
-  m_status->setText(m_itemCount >= MaxTreeItems
-                        ? tr("Tree preview limited to 10,000 items. Inspect a "
-                             "narrower expression to continue.")
-                    : parent->childCount() == 0
-                        ? tr("Empty collection — 0 elements.")
-                        : tr("%1 children loaded. Expand rows for details.")
-                              .arg(parent->childCount() - (more ? 1 : 0)));
+  if (m_itemCount >= MaxTreeItems) {
+    m_status->setText(tr("Tree preview limited to 10,000 items. Inspect a "
+                         "narrower expression to continue."));
+  } else if (!request.preview) {
+    m_status->setText(parent->childCount() == 0
+                          ? tr("Empty collection — 0 elements.")
+                          : tr("%1 children loaded. Expand rows for details.")
+                                .arg(parent->childCount() - (more ? 1 : 0)));
+  }
 
   if (parent == m_root && m_autoTable && !variables.isEmpty() &&
       (m_value.indexedVariables > 0 ||
@@ -1459,11 +1558,12 @@ void DebugValueInspector::appendChildren(const Request &request,
     if (supportsNativeBuffers() || nested)
       m_tabs->setCurrentIndex(1);
   }
-  if (m_tabs->currentIndex() == 1)
-    updateTable();
   updateText();
-  filterTree();
-  restoreView();
+  if (m_tabs->currentIndex() != 1) {
+    filterTree();
+    restoreView();
+  }
+  scheduleViewUpdate();
 }
 
 void DebugValueInspector::addPage(QTreeWidgetItem *parent, int next,
@@ -1478,6 +1578,21 @@ void DebugValueInspector::addPage(QTreeWidgetItem *parent, int next,
   page->setToolTip(0, tr("Double-click or press Enter to load another page."));
   page->setData(0, PageAction, true);
   page->setData(0, PageStart, next);
+}
+
+void DebugValueInspector::scheduleViewUpdate() {
+  if (m_tabs->currentIndex() != 2 && !m_viewUpdate->isActive())
+    m_viewUpdate->start();
+}
+
+void DebugValueInspector::updateTreePreviews() {
+  for (auto *item = m_root; item; item = m_tree->itemBelow(item)) {
+    const QString preview = compactPreview(item);
+    if (!preview.isEmpty()) {
+      item->setText(1, DebugValueFormatter::summary(preview));
+      item->setToolTip(1, DebugValueFormatter::format(preview));
+    }
+  }
 }
 
 void DebugValueInspector::updateTable() {
@@ -1549,6 +1664,7 @@ void DebugValueInspector::updateTable() {
     m_table->setRowCount(rows.size());
     m_table->setColumnCount(columns.size());
     m_table->setHorizontalHeaderLabels(columns);
+    QList<int> previewWidths(columns.size(), 0);
     QStringList labels;
     for (int r = 0; r < rows.size(); ++r) {
       auto *row = rows.at(r);
@@ -1565,7 +1681,10 @@ void DebugValueInspector::updateTable() {
             scalar ? (c == 0 ? row : nullptr) : cells.value(columns.at(c));
         const QString text =
             item ? item->data(0, RawValue).toString() : QString();
-        const QString display = item ? itemDisplayValue(item) : QString();
+        const QString preview = compactPreview(item);
+        const QString display = !preview.isEmpty() ? preview
+                                : item             ? itemDisplayValue(item)
+                                                   : QString();
         auto *cell =
             new QTableWidgetItem(DebugValueFormatter::summary(display, 256));
         cell->setData(Qt::UserRole, display);
@@ -1574,17 +1693,28 @@ void DebugValueInspector::updateTable() {
           if (item != row)
             cell->setData(Qt::UserRole + 2, row->indexOfChild(item));
         }
+        const QString tooltip = preview.isEmpty() ? text : preview;
         cell->setToolTip(
             tr("Double-click or press Enter to inspect in Tree.\n%1")
-                .arg(DebugValueFormatter::format(text)));
+                .arg(DebugValueFormatter::format(tooltip)));
         bool numeric = false;
         display.toDouble(&numeric);
         if (numeric)
           cell->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         m_table->setItem(r, c, cell);
+        if (!preview.isEmpty()) {
+          const QModelIndex index = m_table->indexFromItem(cell);
+          const int width = qMin(TablePreviewWidth,
+                                 m_table->sizeHintForIndex(index).width() + 2);
+          previewWidths[c] = qMax(previewWidths.at(c), width);
+        }
       }
     }
     m_table->setVerticalHeaderLabels(labels);
+    for (int c = 0; c < columns.size(); ++c) {
+      if (previewWidths.at(c) > m_table->columnWidth(c))
+        m_table->setColumnWidth(c, previewWidths.at(c));
+    }
     m_tabs->setTabText(
         1, tr("Table (%1 × %2)").arg(rows.size()).arg(columns.size()));
   }
@@ -1646,6 +1776,7 @@ void DebugValueInspector::filterTree() {
   std::function<bool(QTreeWidgetItem *)> visit = [&](QTreeWidgetItem *item) {
     bool matches = query.isEmpty() ||
                    item->text(0).contains(query, Qt::CaseInsensitive) ||
+                   item->text(1).contains(query, Qt::CaseInsensitive) ||
                    item->data(0, RawValue)
                        .toString()
                        .contains(query, Qt::CaseInsensitive) ||

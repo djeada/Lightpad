@@ -7,11 +7,12 @@
 #include <QOpenGLShaderProgram>
 #include <QOpenGLVertexArrayObject>
 #include <QSurfaceFormat>
+#include <array>
 #include <cstdio>
 
 struct Vertex {
   float position[3];
-  float color[4];
+  std::array<float, 4> color;
 };
 
 struct Scene {
